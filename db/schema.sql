@@ -1,0 +1,285 @@
+-- Lược đồ taomua.com. Tiền lưu bằng đồng (BIGINT), không dùng số thực.
+-- 4 bảng trong spec (suppliers, products, wholesale_orders, working_capital) được giữ tên,
+-- bổ sung các bảng cần cho vận hành thật: người dùng, kênh bán, duyệt, đối soát, chi tiền, nhật ký.
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS users (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         TEXT NOT NULL UNIQUE,
+  name          TEXT NOT NULL,
+  role          TEXT NOT NULL CHECK (role IN ('CEO','TRUONG_NHOM','KE_TOAN','NHAN_VIEN')),
+  password_hash TEXT NOT NULL,
+  telegram_chat_id TEXT,
+  active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+  key        TEXT NOT NULL,
+  at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS login_attempts_key_at ON login_attempts(key, at);
+
+CREATE TABLE IF NOT EXISTS suppliers (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name              TEXT NOT NULL,
+  source            TEXT NOT NULL CHECK (source IN ('1688','AMAZON','WALMART','VN_FACTORY','OEM')),
+  country           TEXT NOT NULL DEFAULT 'VN',
+  years_active      INT NOT NULL DEFAULT 0,
+  contact           TEXT,
+  trust_score       INT NOT NULL DEFAULT 0 CHECK (trust_score BETWEEN 0 AND 100),
+  response_time_sec INT NOT NULL DEFAULT 3600,
+  defect_rate       NUMERIC(5,4) NOT NULL DEFAULT 0.02,   -- 0.02 = 2%
+  on_time_rate      NUMERIC(5,4) NOT NULL DEFAULT 0.9,
+  verified_cert     BOOLEAN NOT NULL DEFAULT FALSE,
+  inventory_sync    BOOLEAN NOT NULL DEFAULT FALSE,
+  moq               INT NOT NULL DEFAULT 10,
+  price_1688        BIGINT,
+  price_vn          BIGINT,
+  is_simulated      BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS products (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sku                 TEXT NOT NULL UNIQUE,
+  name                TEXT NOT NULL,
+  category            TEXT NOT NULL,
+  description         TEXT NOT NULL DEFAULT '',
+  image_emoji         TEXT NOT NULL DEFAULT '📦',
+  trend_score         INT NOT NULL DEFAULT 0 CHECK (trend_score BETWEEN 0 AND 100),
+  supplier_id         UUID REFERENCES suppliers(id),
+  supplier_ids_backup UUID[] NOT NULL DEFAULT '{}',
+  -- Chi phí một cái: giá vốn + phí (ship, marketing, logistics, AI, pháp lý, cổng thanh toán)
+  cost                BIGINT NOT NULL CHECK (cost >= 0),
+  fee                 BIGINT NOT NULL DEFAULT 0 CHECK (fee >= 0),
+  input_vat           BIGINT NOT NULL DEFAULT 0 CHECK (input_vat >= 0), -- VAT đầu vào được khấu trừ, mỗi cái
+  price_taomua_10     BIGINT NOT NULL CHECK (price_taomua_10 > 0),
+  price_taomua_50     BIGINT NOT NULL CHECK (price_taomua_50 > 0),
+  price_taomua_100    BIGINT NOT NULL CHECK (price_taomua_100 > 0),
+  price_taomua_500    BIGINT NOT NULL CHECK (price_taomua_500 > 0),
+  moq                 INT NOT NULL DEFAULT 10 CHECK (moq >= 1),
+  stock_note          TEXT NOT NULL DEFAULT 'Giao thẳng từ xưởng',
+  latr_test_qty       INT,
+  latr_ctr            NUMERIC(5,2),
+  rynn_brain_pass     NUMERIC(5,2),
+  vong_quay_von       NUMERIC(5,2),
+  status              TEXT NOT NULL DEFAULT 'PRICING' CHECK (status IN
+                        ('TREND_HUNTER','SUPPLIER_BRAIN','PRICING','PENDING_APPROVAL','APPROVED','LATR_TEST','MASS_IMPORT','DROPSHIP_SI','PAUSED')),
+  published           BOOLEAN NOT NULL DEFAULT FALSE,
+  is_simulated        BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (input_vat <= cost + fee)
+);
+
+-- Giá trên nền tảng khác để khách so sánh. Chỉ hiện khi đã kiểm tra trong 30 ngày.
+CREATE TABLE IF NOT EXISTS price_comparisons (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id  UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  platform    TEXT NOT NULL,
+  price       BIGINT NOT NULL CHECK (price > 0),
+  qty_basis   INT NOT NULL DEFAULT 1,
+  source_url  TEXT NOT NULL,
+  checked_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  checked_by  UUID REFERENCES users(id)
+);
+
+-- Kênh bán: taomua.com là kênh riêng; 9mua, Shopee, TikTok Shop... là các nền tảng bên ngoài ngang nhau.
+CREATE TABLE IF NOT EXISTS sales_channels (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code        TEXT NOT NULL UNIQUE,
+  name        TEXT NOT NULL,
+  kind        TEXT NOT NULL CHECK (kind IN ('OWN','MARKETPLACE','SOCIAL','PARTNER_SITE')),
+  connector   TEXT NOT NULL DEFAULT 'MANUAL' CHECK (connector IN ('NATIVE','MANUAL','CSV','API')),
+  api_status  TEXT NOT NULL DEFAULT 'CHUA_KET_NOI' CHECK (api_status IN ('KHONG_CAN','CHUA_KET_NOI','DANG_KET_NOI','LOI')),
+  fee_pct     NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (fee_pct >= 0 AND fee_pct < 100),
+  active      BOOLEAN NOT NULL DEFAULT TRUE,
+  notes       TEXT NOT NULL DEFAULT '',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS channel_listings (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel_id   UUID NOT NULL REFERENCES sales_channels(id) ON DELETE CASCADE,
+  product_id   UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  price        BIGINT NOT NULL CHECK (price > 0),
+  external_sku TEXT,
+  external_url TEXT,
+  status       TEXT NOT NULL DEFAULT 'NHAP' CHECK (status IN ('NHAP','DANG_BAN','TAM_DUNG')),
+  synced_at    TIMESTAMPTZ,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (channel_id, product_id)
+);
+
+CREATE TABLE IF NOT EXISTS customers (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name         TEXT NOT NULL,
+  phone        TEXT NOT NULL,
+  email        TEXT,
+  kind         TEXT NOT NULL DEFAULT 'SI' CHECK (kind IN ('SI','LE','AI_AGENT')),
+  agent_limit  BIGINT,       -- hạn mức chi tiêu cho AI agent: 10tr/50tr/100tr
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (phone)
+);
+
+CREATE SEQUENCE IF NOT EXISTS order_code_seq START 1001;
+
+CREATE TABLE IF NOT EXISTS wholesale_orders (
+  id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code                     TEXT NOT NULL UNIQUE,
+  channel_id               UUID NOT NULL REFERENCES sales_channels(id),
+  external_ref             TEXT,
+  customer_id              UUID NOT NULL REFERENCES customers(id),
+  ship_address             TEXT NOT NULL,
+  note                     TEXT NOT NULL DEFAULT '',
+  status                   TEXT NOT NULL DEFAULT 'CHO_DUYET' CHECK (status IN
+                             ('CHO_DUYET','CHO_THANH_TOAN','DANG_CHUAN_BI','DANG_GIAO','DA_GIAO','HOAN_TAT','TU_CHOI','HUY')),
+  tong_dt                  BIGINT NOT NULL,
+  tong_chi_phi_truoc_thue  BIGINT NOT NULL,
+  vat_dau_vao              BIGINT NOT NULL DEFAULT 0,
+  phi_kenh                 BIGINT NOT NULL DEFAULT 0,
+  vat_8                    BIGINT NOT NULL,
+  phi_mb_1                 BIGINT NOT NULL,
+  ln_truoc_tndn            BIGINT NOT NULL,
+  thue_tndn_20             BIGINT NOT NULL,
+  ln_rong_sau_thue         BIGINT NOT NULL,
+  bien_rong_tren_chi_phi   NUMERIC(8,2) NOT NULL,
+  bien_rong_tren_dt        NUMERIC(8,2) NOT NULL,
+  cap_duyet                INT NOT NULL CHECK (cap_duyet BETWEEN 1 AND 5),
+  cap_ly_do                TEXT NOT NULL DEFAULT '',
+  approval_status          TEXT NOT NULL DEFAULT 'PENDING' CHECK (approval_status IN ('PENDING','APPROVED','REJECTED')),
+  approval_deadline        TIMESTAMPTZ,
+  approved_by              UUID REFERENCES users(id),
+  approved_by_label        TEXT,
+  approved_at              TIMESTAMPTZ,
+  payment_status           TEXT NOT NULL DEFAULT 'CHUA_THANH_TOAN' CHECK (payment_status IN ('CHUA_THANH_TOAN','DA_NHAN')),
+  paid_at                  TIMESTAMPTZ,
+  trade_assurance_status   TEXT NOT NULL DEFAULT 'NONE' CHECK (trade_assurance_status IN ('NONE','HOLD','RELEASED','REFUND')),
+  released_by_label        TEXT,
+  released_at              TIMESTAMPTZ,
+  wfs_status               TEXT NOT NULL DEFAULT 'DROPSHIP' CHECK (wfs_status IN ('DROPSHIP','WFS_FULFILLMENT','SAME_DAY_30MIN')),
+  carrier                  TEXT,
+  tracking_no              TEXT,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (channel_id, external_ref)
+);
+CREATE INDEX IF NOT EXISTS orders_status ON wholesale_orders(status);
+
+CREATE TABLE IF NOT EXISTS order_items (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id    UUID NOT NULL REFERENCES wholesale_orders(id) ON DELETE CASCADE,
+  product_id  UUID NOT NULL REFERENCES products(id),
+  product_name TEXT NOT NULL,
+  quantity    INT NOT NULL CHECK (quantity > 0),
+  tier        INT NOT NULL CHECK (tier IN (0,10,50,100,500)),  -- 0 = giá kênh bán, không theo bậc
+  unit_price  BIGINT NOT NULL,
+  unit_cost   BIGINT NOT NULL,
+  unit_input_vat BIGINT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS approvals (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id   UUID NOT NULL REFERENCES wholesale_orders(id) ON DELETE CASCADE,
+  level      INT NOT NULL,
+  decision   TEXT NOT NULL CHECK (decision IN ('APPROVED','REJECTED')),
+  decided_by UUID REFERENCES users(id),
+  decided_by_label TEXT NOT NULL,
+  via        TEXT NOT NULL DEFAULT 'WEB' CHECK (via IN ('WEB','TELEGRAM','AUTO')),
+  note       TEXT NOT NULL DEFAULT '',
+  decided_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS rfqs (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code         TEXT NOT NULL UNIQUE,
+  contact_name TEXT NOT NULL,
+  phone        TEXT NOT NULL,
+  email        TEXT,
+  product_text TEXT NOT NULL,
+  quantity     INT NOT NULL CHECK (quantity > 0),
+  target_price BIGINT,
+  status       TEXT NOT NULL DEFAULT 'MOI' CHECK (status IN ('MOI','DANG_TIM_XUONG','DA_BAO_GIA','DONG')),
+  quote_price  BIGINT,
+  quote_note   TEXT NOT NULL DEFAULT '',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS working_capital (
+  month           INT PRIMARY KEY CHECK (month BETWEEN 1 AND 12),
+  tong_dt         BIGINT NOT NULL,
+  von_luu_dong_30 BIGINT NOT NULL,
+  du_phong_15     BIGINT NOT NULL,
+  tong_von_can_45 BIGINT NOT NULL,
+  ln_rong         BIGINT NOT NULL DEFAULT 0,
+  vong_quay_von   NUMERIC(5,2) NOT NULL,
+  bien_an_toan    NUMERIC(5,2) NOT NULL,
+  mb_bank_balance BIGINT,
+  status          TEXT NOT NULL CHECK (status IN ('SAFE','WARNING','DANGER')),
+  is_simulated    BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS bank_transactions (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id      UUID NOT NULL,
+  txn_date      DATE NOT NULL,
+  amount        BIGINT NOT NULL,           -- dương: tiền vào, âm: tiền ra
+  description   TEXT NOT NULL,
+  bank_ref      TEXT,
+  matched_order_id UUID REFERENCES wholesale_orders(id),
+  matched_payout_id UUID,
+  imported_by   UUID REFERENCES users(id),
+  imported_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (bank_ref)
+);
+
+CREATE TABLE IF NOT EXISTS reconciliation_runs (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id    UUID NOT NULL,
+  period_from DATE NOT NULL,
+  period_to   DATE NOT NULL,
+  expected_in BIGINT NOT NULL,
+  actual_in   BIGINT NOT NULL,
+  diff_pct    NUMERIC(8,2) NOT NULL,
+  unmatched   INT NOT NULL,
+  status      TEXT NOT NULL CHECK (status IN ('KHOP','LECH')),
+  created_by  UUID REFERENCES users(id),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS payouts (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category     TEXT NOT NULL CHECK (category IN ('NAP_AI','NAP_ADS','TAM_UNG_SHIP','MUA_MAU_LATR','DAT_COC_XUONG','NOP_THUE','KHAC')),
+  amount       BIGINT NOT NULL CHECK (amount > 0),
+  payee        TEXT NOT NULL,
+  reason       TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'DE_XUAT' CHECK (status IN ('DE_XUAT','DA_DUYET','DA_CHI','TU_CHOI')),
+  proposed_by  UUID NOT NULL REFERENCES users(id),
+  approved_by  UUID REFERENCES users(id),
+  paid_by      UUID REFERENCES users(id),
+  paid_ref     TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  approved_at  TIMESTAMPTZ,
+  paid_at      TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id        BIGSERIAL PRIMARY KEY,
+  user_id   UUID REFERENCES users(id),
+  actor     TEXT NOT NULL,
+  action    TEXT NOT NULL,
+  entity    TEXT NOT NULL,
+  entity_id TEXT,
+  detail    JSONB NOT NULL DEFAULT '{}',
+  at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS audit_at ON audit_log(at DESC);
