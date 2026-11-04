@@ -72,8 +72,8 @@ async function main() {
 
   const ceo = await one('SELECT id FROM users WHERE role=$1', ['CEO']);
   await q(`INSERT INTO price_comparisons(product_id, platform, price, qty_basis, source_url, checked_by) VALUES
-    ($1,'Sàn A (ví dụ giả lập)',39000,1,'https://example.com/gia-lap',$3),
-    ($1,'Sàn B (ví dụ giả lập)',45000,1,'https://example.com/gia-lap',$3),
+    ($1,'Sàn A (ví dụ giả lập)',59000,1,'https://example.com/gia-lap',$3),
+    ($1,'Sàn B (ví dụ giả lập)',65000,1,'https://example.com/gia-lap',$3),
     ($2,'Sàn A (ví dụ giả lập)',259000,1,'https://example.com/gia-lap',$3)`, [pid['AO-3D'], pid['TWS-PRO'], ceo.id]);
 
   // Kênh bán: taomua.com là kênh riêng; các nền tảng khác (kể cả 9mua) là kênh ngoài ngang nhau.

@@ -66,6 +66,10 @@ export async function createOrder(input: NewOrder, actor: Actor = SYSTEM) {
     const cost = lines.reduce((s, l) => s + (Number(l.product.cost) + Number(l.product.fee)) * l.quantity, 0);
     const inputVat = lines.reduce((s, l) => s + Number(l.product.input_vat) * l.quantity, 0);
     const m = calcMargin({ revenue, cost, inputVat, channelFeePct: Number(ch.fee_pct) });
+    const existing = (await c.query('SELECT kind, agent_limit FROM customers WHERE phone=$1', [phone])).rows[0];
+    if (existing?.kind === 'AI_AGENT' && existing.agent_limit && m.revenue > Number(existing.agent_limit)) {
+      throw new OrderError(`Đơn vượt hạn mức ${Number(existing.agent_limit).toLocaleString('vi-VN')} đ của AI agent.`);
+    }
     const { level, reason } = approvalLevel(m.revenue, m.marginOnCost, m.net);
     const auto = level === 1;
 

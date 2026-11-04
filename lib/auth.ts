@@ -79,7 +79,7 @@ export async function currentUser(): Promise<User | null> {
 export async function requireUser(perm?: Perm): Promise<User> {
   const u = await currentUser();
   if (!u) redirect('/quan-tri/dang-nhap');
-  if (perm && !can(u, perm)) throw new Error('Bạn không có quyền làm việc này.');
+  if (perm && !can(u, perm)) redirect(`/quan-tri?loi=${encodeURIComponent('Bạn không có quyền vào mục này.')}`);
   return u;
 }
 export const actorOf = (u: User) => ({ id: u.id, label: `${u.name} (${ROLE_LABEL[u.role]})` });
