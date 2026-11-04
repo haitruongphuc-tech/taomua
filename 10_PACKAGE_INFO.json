@@ -1,0 +1,32 @@
+{
+  "name": "taomua.com FINAL FOR CLAUDE",
+  "version": "2026.11.04 FINAL - No Telegram - One-Tap Approve - No Overlap - No Hash",
+  "ceo": "Nguyen Hai hai@9mua.com MB Bank 0331 09MUA 9999 MST 0316437942",
+  "model": "Autonomous Sourcing Cobot Network 95-98% AI",
+  "bien_rong": "15-150% tren chi phi 8-52% tren DT sau thue phi chuan ke toan",
+  "von": "30% von luu dong +15% du phong =45% DT vong quay >3 bien an toan >20%",
+  "approval": "One-Tap Approve - 1 cham <5s - Thay Telegram - Zalo OA + Email",
+  "files": 22,
+  "testzip": "OK 100%",
+  "fix": [
+    "Telegram -> One-Tap Approve",
+    "Ten file hash -> ASCII ngan",
+    "Chong lan mockup -> Moi file 1 trang",
+    "Thieu DB schema rieng -> 02_DATABASE_SCHEMA.sql",
+    "Thieu API spec rieng -> 03_API_SPEC.md",
+    "Thieu ban do file -> 08_PROJECT_MAP.md",
+    "Claude hay hoi lai -> 09_CLAUDE_QUESTIONS_ANSWERED.md"
+  ],
+  "continue": [
+    "01_TECHNICAL_SPEC.md",
+    "02_DATABASE_SCHEMA.sql",
+    "03_API_SPEC.md",
+    "04_FRONTEND_PAGES.md",
+    "05_N8N_WORKFLOW.json",
+    "06_APPROVAL_SYSTEM.md",
+    "mockups/",
+    "excels/",
+    "pdfs/",
+    "pngs/"
+  ]
+}

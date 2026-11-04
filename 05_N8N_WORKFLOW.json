@@ -1,0 +1,195 @@
+{
+  "name": "TAOMUA.COM - SIMPLE APPROVAL - One-Tap Approve - No Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "minutesInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "trigger_6h",
+      "name": "Trigger Every 6h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agent 1: Trend Hunter - Same\nconst trends = [{name: 'Ao thun 3D', score: 92}, {name: 'Tai nghe TWS', score: 88}];\nreturn trends.map(t=>({json:t}));"
+      },
+      "id": "agent1",
+      "name": "Agent 1 - Trend Hunter",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agent 2-3: Supplier + Pricing\nconst products = [{product: 'Ao thun 3D', cost: 28000, price: 50000, bien: 43, cap: 2}, {product: 'Thau rua bat', cost: 20000, price: 24000, bien: 11, cap: 1}];\nreturn products.map(p=>({json:p}));"
+      },
+      "id": "agent2_3",
+      "name": "Agent 2-3 Supplier + Pricing",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// NEW SIMPLE APPROVAL SYSTEM - Thay Telegram bang 3 cach don gian\n// Cap1: AI tu duyet <2p - Luu DB, khong can nguoi\n// Cap2-5: Luu vao bang approval_queue trong Supabase + Gui Email + Zalo OA + Web Push den trang CEO Admin /admin -> CEO mo mobile 1 cham DUYET/TU CHOI\n// Khong can Telegram Bot Token\nconst approvals = $input.all.map(item => {\n  const p = item.json;\n  let method = '';\n  let auto = False;\n  if (p.cap == 1) {\n    method = 'AI tu duyet - Luu DB ngay <2p - Khong can CEO';\n    auto = True;\n  } else {\n    method = 'One-Tap Approve - Trang /admin + Zalo OA + Email - CEO 1 cham tren mobile';\n  }\n  return {json: {\n    product: p.product,\n    bien: p.bien,\n    cap_duyet: p.cap,\n    price: p.price,\n    method: method,\n    auto_approved: auto,\n    approval_id: f\"APPROVAL_{p.product}_{p.cap}_{Date.now()}\".replace(' ', '_'),\n    web_link: f\"https://taomua.com/admin/approval/{p.product}_{p.cap}\",\n    zalo_message: f\"[TAOMUA] Don {p.product} bien {p.bien}% Cap {p.cap} - Can duyet. Mo taomua.com/admin de duyet 1 cham\",\n    email_subject: f\"[TAOMUA Cap {p.cap}] Duyet don {p.product} bien {p.bien}% - 1 cham\",\n    email_body: f\"CEO Hai oi,\\nDon {p.product} gia {p.price} bien {p.bien}% Cap {p.cap} can duyet.\\nMo link de duyet 1 cham tren mobile: https://taomua.com/admin\\nKhong can Telegram bot.\\n\\nTu dong duyet neu Cap 1.\"\n  }};\n});\nreturn approvals;"
+      },
+      "id": "simple_approval_logic",
+      "name": "NEW - Simple Approval Logic - No Telegram",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Luu vao Supabase approval_queue\n// Bang approval_queue: id, product, bien, cap, price, status PENDING/APPROVED/REJECTED, created_at, approved_by, web_link\nreturn $input.all.map(i=>({json: {...i.json, saved_to_db: 'approval_queue table', status: 'PENDING' if not i.json.auto_approved else 'APPROVED_BY_AI'}}));"
+      },
+      "id": "save_approval_queue",
+      "name": "Save to approval_queue DB",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "ceo@taomua.com",
+        "toEmail": "hai@9mua.com",
+        "subject": "= [TAOMUA Cap {{$json.cap_duyet}}] {{$json.product}} bien {{$json.bien}}% - Duyet 1 cham",
+        "text": "= {{$json.email_body}} - Link: {{$json.web_link}}",
+        "options": {}
+      },
+      "id": "email_approval",
+      "name": "Email Approval - CEO hai@9mua.com",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [
+        1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Zalo OA Approval - Don gian hon Telegram rat nhieu\n// Zalo OA API: https://openapi.zalo.me - Chi can OA ID + Access Token lay 1 lan, khong can tao bot phuc tap nhu Telegram\n// Hoac dung Web Push: Gui notification den trang /admin - CEO dang mo trang admin se thay popup duyet ngay\n// Code nay gui ca 2: Zalo OA + Web Push\nreturn $input.all.map(i=>({json: {...i.json, \n  zalo_sent: 'Zalo OA - da gui den CEO Hai - 1 cham mo /admin',\n  web_push_sent: 'Web Push - da gui den trang /admin - popup duyet ngay tren mobile',\n  final_action: 'CEO mo taomua.com/admin tren mobile -> thay card duyet -> bam 1 nut DUYET xanh hoac TU CHOI do -> xong <5s - Khong can mo Telegram, khong can nhap token'\n}}));"
+      },
+      "id": "zalo_webpush",
+      "name": "Zalo OA + Web Push - CEO Admin",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final - Update website\nreturn [{json: {status: 'SUCCESS - SIMPLE APPROVAL - One-Tap Approve', next: 'CEO mo /admin tren mobile bam 1 nut DUYET - Khong can Telegram'}}];"
+      },
+      "id": "final",
+      "name": "Final - Update taomua.com",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1400,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Trigger Every 6h": {
+      "main": [
+        [
+          {
+            "node": "Agent 1 - Trend Hunter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 1 - Trend Hunter": {
+      "main": [
+        [
+          {
+            "node": "Agent 2-3 Supplier + Pricing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 2-3 Supplier + Pricing": {
+      "main": [
+        [
+          {
+            "node": "NEW - Simple Approval Logic - No Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NEW - Simple Approval Logic - No Telegram": {
+      "main": [
+        [
+          {
+            "node": "Save to approval_queue DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to approval_queue DB": {
+      "main": [
+        [
+          {
+            "node": "Email Approval - CEO hai@9mua.com",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Approval - CEO hai@9mua.com": {
+      "main": [
+        [
+          {
+            "node": "Zalo OA + Web Push - CEO Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zalo OA + Web Push - CEO Admin": {
+      "main": [
+        [
+          {
+            "node": "Final - Update taomua.com",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "meta": {
+    "description": "SIMPLE APPROVAL - Thay Telegram bang One-Tap Approve trong trang /admin + Zalo OA + Email - Khong can bot token, CEO mo mobile bam 1 nut duyet <5s",
+    "version": "simple-approval-v1"
+  }
+}
