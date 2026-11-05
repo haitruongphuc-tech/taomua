@@ -1,0 +1,7 @@
+
+<svg width="200" height="60" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="60" rx="12" fill="#0D47A1"/>
+  <text x="20" y="38" font-family="Arial, sans-serif" font-weight="bold" font-size="24" fill="white">taomua</text>
+  <text x="105" y="38" font-family="Arial" font-weight="bold" font-size="24" fill="#FF6F00">.com</text>
+  <text x="20" y="52" font-family="Arial" font-size="10" fill="#FFCC80">Mua nhiều lời nhiều</text>
+</svg>
