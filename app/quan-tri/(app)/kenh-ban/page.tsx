@@ -4,6 +4,7 @@ import { q } from '@/lib/db';
 import { audit } from '@/lib/audit';
 import { runAction, UserError } from '@/lib/action';
 import { listingMargin, CONNECTORS } from '@/lib/channels';
+import { WHOLESALE_MARGIN_WARN } from '@/lib/pricing';
 import { isUuid } from '@/lib/catalog';
 import { vnd, pct, dt } from '@/lib/format';
 import Flash from '@/components/Flash';
@@ -52,9 +53,13 @@ async function saveListing(fd: FormData) {
     await q(`INSERT INTO channel_listings(channel_id, product_id, price, status, external_sku, external_url) VALUES ($1,$2,$3,$4,$5,$6)
       ON CONFLICT (channel_id, product_id) DO UPDATE SET price=EXCLUDED.price, status=EXCLUDED.status,
         external_sku=COALESCE(EXCLUDED.external_sku, channel_listings.external_sku), external_url=COALESCE(EXCLUDED.external_url, channel_listings.external_url), updated_at=now()`,
-      [channel, product, price, status, String(fd.get('external_sku') ?? '').trim() || null, String(fd.get('external_url') ?? '').trim() || null]);
-    await audit(actorOf(u), 'listing.save', 'listing', null, { channel, product, price, status });
-    return 'Đã lưu giá trên kênh. Nhớ cập nhật giá trên nền tảng (chưa có kết nối API).';
+      [channel, product, price, status, String(fd.get('external_sku') ?? '').trim() || null, String(fd.get('external_url') ?? '').trim() || null])
+      .catch((e) => { if (e?.code === '23503') throw new UserError('Kênh hoặc sản phẩm không tồn tại.'); throw e; });
+    const info = await q(`SELECT p.cost + p.fee AS unit_cost, p.input_vat, ch.fee_pct FROM products p, sales_channels ch WHERE p.id=$1 AND ch.id=$2`, [product, channel]);
+    const m = listingMargin(price, info[0].unit_cost, info[0].input_vat, info[0].fee_pct);
+    await audit(actorOf(u), 'listing.save', 'listing', null, { channel, product, price, status, margin: m.marginOnCost });
+    const warn = m.net <= 0 ? ' Cảnh báo: giá này bán lỗ.' : m.marginOnCost > WHOLESALE_MARGIN_WARN ? ` Cảnh báo: biên ${m.marginOnCost}% vượt ${WHOLESALE_MARGIN_WARN}%, hãy kiểm tra lại giá.` : '';
+    return 'Đã lưu giá trên kênh. Nhớ cập nhật giá trên nền tảng (chưa có kết nối API).' + warn;
   });
 }
 
@@ -93,7 +98,8 @@ export default async function Channels({ searchParams }: { searchParams: { ok?: 
               <tr key={l.id}>
                 <td>{l.channel_name}</td><td>{l.name} <span className="small muted">{l.sku}</span></td>
                 <td className="num">{vnd(l.price)}</td><td className="num">{vnd(m.channelFee)}</td><td className="num">{vnd(m.net)}</td>
-                <td className="num"><span className={`badge ${m.net <= 0 ? 'bad' : m.marginOnCost < 15 ? 'warn' : 'ok'}`}>{pct(m.marginOnCost)}</span></td>
+                <td className="num"><span className={`badge ${m.net <= 0 ? 'bad' : m.marginOnCost < 15 || m.marginOnCost > WHOLESALE_MARGIN_WARN ? 'warn' : 'ok'}`}>{pct(m.marginOnCost)}</span>
+                  {m.marginOnCost > WHOLESALE_MARGIN_WARN && <div className="small" style={{ color: 'var(--warn)' }}>vượt {WHOLESALE_MARGIN_WARN}%</div>}</td>
                 <td>{LST[l.status]}<div className="small muted">{l.synced_at ? `đồng bộ ${dt(l.synced_at)}` : 'chưa đồng bộ API'}</div></td>
                 <td><a className="small" href={`/api/kenh-ban/${l.channel_code}/san-pham.csv`}>Tải</a></td>
               </tr>
