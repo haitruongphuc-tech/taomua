@@ -1,0 +1,31 @@
+{
+  "name": "taomua - 7 AI agent - 6 giờ/lần",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 6 }] } },
+      "name": "Mỗi 6 giờ",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TAOMUA_URL }}/api/v1/agents/run",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-api-key", "value": "={{ $env.TAOMUA_INTERNAL_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": { "timeout": 120000 }
+      },
+      "name": "Chạy 7 agent taomua",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0]
+    }
+  ],
+  "connections": { "Mỗi 6 giờ": { "main": [[{ "node": "Chạy 7 agent taomua", "type": "main", "index": 0 }]] } },
+  "settings": {},
+  "meta": { "ghi_chu": "Đặt biến môi trường n8n TAOMUA_URL (ví dụ https://taomua.com) và TAOMUA_INTERNAL_API_KEY (bằng INTERNAL_API_KEY của taomua). Duyệt đề xuất ở /quan-tri/ai." }
+}

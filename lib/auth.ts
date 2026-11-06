@@ -26,6 +26,7 @@ export const PERMS = {
   'payout.propose': ['CEO', 'TRUONG_NHOM', 'KE_TOAN', 'NHAN_VIEN'],
   'payout.approve': ['CEO', 'TRUONG_NHOM'], // Trưởng nhóm chỉ đến Cấp 2 (< 20 triệu), xem lib/payouts.ts
   'payout.controls': ['CEO'],
+  'agents.run': ['CEO', 'TRUONG_NHOM'],
   'payout.pay': ['CEO', 'KE_TOAN'],
   'audit.view': ['CEO', 'KE_TOAN'],
   'users.manage': ['CEO'],

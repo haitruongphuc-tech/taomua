@@ -8,12 +8,14 @@ Pháp nhân bán hàng: **CÔNG TY CỔ PHẦN NỮ HOÀNG NỘI THẤT**, MST 0
 
 ## Chạy thử
 
-Cần Node 20+ và PostgreSQL 14+.
+Cần Node 20+. PostgreSQL 14+ cài sẵn, hoặc dùng bản chạy trong thư mục dự án (`npm run db:local`, dữ liệu ở `.pgdata/`).
 
 ```bash
-cp .env.example .env            # sửa DATABASE_URL
+cp .env.example .env            # sửa DATABASE_URL nếu không dùng db:local
 npm install
+npm run db:local                # cửa sổ riêng, để mở (chỉ khi máy chưa có PostgreSQL)
 npm run db:migrate
+npm run agents                  # chạy 7 AI agent một lần (lịch 6 giờ: n8n/taomua_7_agents_6h.json)
 SEED_CEO_PASSWORD=... SEED_STAFF_PASSWORD=... npm run db:seed   # bỏ trống thì seed tự sinh mật khẩu và in ra một lần
 npm run dev                     # http://localhost:3000
 npm test                        # cần database taomua_test (hoặc TEST_DATABASE_URL); bài test sẽ XÓA và tạo lại database này
@@ -26,8 +28,10 @@ Tài khoản seed: `ceo@`, `truongnhom@`, `ketoan@`, `nhanvien@taomua.local`. Đ
 | Phần | Đường dẫn |
 |---|---|
 | Cửa hàng sỉ | `/`, `/san-pham/[id]`, `/gio-hang`, `/don-hang` (tra cứu bằng mã đơn + SĐT), `/bao-gia` (RFQ) |
-| Quản trị | `/quan-tri` — tổng quan, chờ duyệt, đơn hàng, sản phẩm, xưởng, kênh bán, nhập đơn từ kênh, báo giá, vốn, đối soát, chi tiền, kiểm soát chi, dịch vụ AI, nhật ký, người dùng |
-| API theo spec | `/api/v1/...` (14 endpoint, xem *Quản trị → Dịch vụ AI*) |
+| Quản trị | `/quan-tri` — tổng quan, chờ duyệt, đơn hàng, sản phẩm, xưởng, kênh bán, nhập đơn từ kênh, báo giá, vốn, đối soát, chi tiền, kiểm soát chi, AI tự động, thông tin cần nhập, nhật ký, người dùng |
+| API theo spec | `/api/v1/...` (15 endpoint, xem *Quản trị → AI tự động*) |
+| 7 AI agent | `lib/agents/` — quy tắc `rules.ts`, chạy `index.ts`, áp dụng `apply.ts`, duyệt One-Tap `decide.ts`; AI ngôn ngữ `lib/ai.ts` |
+| Thông tin còn thiếu | `lib/setup-status.ts` → trang `/quan-tri/can-nhap` |
 | Logic | `lib/pricing.ts` (biên), `lib/approval.ts` (cấp duyệt), `lib/orders.ts` (vòng đời đơn, giữ tiền), `lib/channels.ts` (kênh bán), `lib/reconcile.ts` (đối soát) |
 | Lược đồ | `db/schema.sql` |
 | Tài liệu gốc | `docs/goc/` (spec, workflow n8n, mockup, dự toán) |
@@ -50,6 +54,20 @@ Mức sàn: biên dưới 15% → tối thiểu Cấp 2; đơn lỗ → tối th
 **Chi tiền** (`lib/payouts.ts`, theo `docs/PAYMENT_MANAGEMENT_AI_CEO_200D.md`): cùng ngưỡng cấp như duyệt đơn. Dưới 5 triệu tự duyệt (trừ loại "Khác") · 5–20 triệu trưởng nhóm hoặc CEO, không tự duyệt khoản mình đề xuất · từ 20 triệu chỉ CEO · từ 10 triệu người duyệt nhập lại mật khẩu. Hệ thống không tự chuyển tiền: kế toán chuyển khoản rồi ghi mã giao dịch.
 
 **Kiểm soát chi** (`/quan-tri/kiem-soat-chi`, CEO đổi): nút tổng tắt thì mọi đơn và khoản chi Cấp 1 cần người duyệt · 6 nút khóa từng loại chi · nút khóa nhập hàng mới (chặn đặt cọc xưởng và mua mẫu) · Trade Assurance luôn bật. Mỗi lần đổi ghi nhật ký.
+
+**7 AI agent** (`docs/MULTILINGUAL_7_AI_SPEC.md`), chạy 6 giờ/lần trên dữ liệu thật:
+
+| Agent | Tự làm | Đưa vào hàng đợi One-Tap |
+|---|---|---|
+| RYN-TREND | Bảng xếp hạng hàng hot (trend, bán 7 ngày, CTR) | — (chỉ đọc) |
+| RYN-SUPPLY | Tính lại TrustScore | Đổi xưởng chính không đạt (Trust < 85, lỗi > 2%) sang xưởng dự phòng (Cấp 2) |
+| RYN-NEGO | 4 kịch bản đàm phán tiếng Trung + tiếng Việt cho xưởng 1688, mục tiêu −10% | — |
+| RYN-PRICE | Giảm 2% khi đối thủ rẻ hơn, vẫn giữ biên ≥ 15% (Cấp 1) | Nâng giá bậc có biên < 15% (Cấp 2); cảnh báo biên > 150% |
+| RYN-TRACE | Lưu lịch sử giá vốn; cảnh báo giá vốn tăng ≥ 10%, QC < 98% | — |
+| RYN-SALES | Báo giá yêu cầu sỉ dưới 5 triệu; dừng hàng bán thử CTR < 2%; dịch tên 7 ngôn ngữ (khi có AI_API_KEY) | Báo giá lớn hơn (theo cấp); nhập lớn khi CTR > 3% (Cấp 3) |
+| RYN-LOGI | Cảnh báo đơn quá hạn duyệt, chờ thanh toán, chờ giải ngân, khoản chi chờ lâu | Khóa nhập mới khi biên an toàn < 20% (tự làm nếu số thật, đề xuất nếu số giả lập) |
+
+Nút tổng tắt thì không gì tự làm, trừ phân tích dữ liệu. Không agent nào chuyển tiền. Đề xuất bị từ chối thì 7 ngày không nhắc lại; đề xuất cũ không áp dụng nếu dữ liệu đã bị người khác đổi.
 
 **Giữ tiền**: tiền khách chuyển được giữ đến khi khách xác nhận đã nhận hàng, hoặc CEO xác nhận. CEO có thể hoàn tiền từ khoản đang giữ.
 

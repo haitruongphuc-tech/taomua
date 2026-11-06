@@ -1,0 +1,79 @@
+// Danh sách thông tin còn thiếu / đang giả lập, tính trực tiếp từ cấu hình và database mỗi lần mở trang.
+// THIEU: chưa có, cần nhập sau. GIA_LAP: đang chạy bằng số giả lập, cần sửa sau. CHUA_LAM: spec có nhưng chờ nhà cung cấp / quyết định. OK: đã có.
+import { q } from './db';
+
+export type SetupStatus = 'OK' | 'THIEU' | 'GIA_LAP' | 'CHUA_LAM';
+export type SetupItem = { group: string; label: string; status: SetupStatus; detail: string; where: string; href?: string };
+
+const env = (...keys: string[]) => keys.every((k) => !!process.env[k]);
+
+export async function setupItems(): Promise<SetupItem[]> {
+  const n = async (sql: string) => Number((await q<{ n: number }>(sql))[0]?.n ?? 0);
+  const [simProducts, products, simSuppliers, suppliers, simCapital, noBalance, comps, simFees, noQc, noTrace, noI18n] = await Promise.all([
+    n('SELECT count(*)::int n FROM products WHERE is_simulated'),
+    n('SELECT count(*)::int n FROM products'),
+    n('SELECT count(*)::int n FROM suppliers WHERE is_simulated'),
+    n('SELECT count(*)::int n FROM suppliers'),
+    n('SELECT count(*)::int n FROM working_capital WHERE is_simulated'),
+    n('SELECT count(*)::int n FROM working_capital WHERE mb_bank_balance IS NULL'),
+    n("SELECT count(*)::int n FROM price_comparisons WHERE checked_at >= now() - interval '30 days'"),
+    n("SELECT count(*)::int n FROM sales_channels WHERE kind <> 'OWN' AND (notes ILIKE '%giả lập%' OR notes ILIKE '%cần cập nhật%')"),
+    n('SELECT count(*)::int n FROM products WHERE rynn_brain_pass IS NULL'),
+    n('SELECT count(*)::int n FROM products WHERE latr_ctr IS NULL'),
+    n("SELECT count(*)::int n FROM products WHERE published AND NOT name_i18n ? 'zh'"),
+  ]);
+  const rateSet = Number(process.env.CNY_VND_RATE) > 0;
+
+  return [
+    // --- Khóa API và cấu hình (ghi vào file .env trên máy chủ, không gửi qua chat) ---
+    { group: 'Cấu hình .env', label: 'AI ngôn ngữ (Qwen / OpenAI)', status: env('AI_API_KEY') ? 'OK' : 'THIEU', where: 'AI_API_KEY, AI_BASE_URL, AI_MODEL',
+      detail: 'Dịch tên sản phẩm 7 ngôn ngữ, dịch tin nhắn xưởng. Chưa có thì 7 agent vẫn chạy bằng quy tắc, phần dịch tạm dừng.' },
+    { group: 'Cấu hình .env', label: 'Khóa API cho n8n gọi lịch 6 giờ', status: env('INTERNAL_API_KEY') ? 'OK' : 'THIEU', where: 'INTERNAL_API_KEY',
+      detail: 'n8n gọi POST /api/v1/agents/run với header x-api-key. Hoặc chạy "npm run agents" bằng Task Scheduler.' },
+    { group: 'Cấu hình .env', label: 'Bot Telegram báo CEO', status: env('TELEGRAM_BOT_TOKEN') ? 'OK' : 'THIEU', where: 'TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET; chat id trong Người dùng',
+      detail: 'Gửi cảnh báo và yêu cầu duyệt. Chưa có thì chỉ hiện trên trang quản trị.' },
+    { group: 'Cấu hình .env', label: 'Tài khoản nhận tiền hiển thị cho khách', status: env('PAYMENT_BANK_NAME', 'PAYMENT_ACCOUNT_NO', 'PAYMENT_ACCOUNT_NAME') ? 'OK' : 'THIEU',
+      where: 'PAYMENT_BANK_NAME, PAYMENT_ACCOUNT_NO, PAYMENT_ACCOUNT_NAME', detail: 'Chưa có thì khách không thấy số tài khoản nào.' },
+    { group: 'Cấu hình .env', label: 'Tỷ giá CNY → VND', status: rateSet ? 'OK' : 'GIA_LAP', where: 'CNY_VND_RATE',
+      detail: rateSet ? `Đang dùng ${process.env.CNY_VND_RATE}.` : 'RYN-NEGO đang dùng tạm 3.500 đ/tệ để tính giá đàm phán.' },
+
+    // --- Dữ liệu giả lập ---
+    { group: 'Dữ liệu giả lập', label: 'Sản phẩm', status: simProducts ? 'GIA_LAP' : products ? 'OK' : 'THIEU', href: '/quan-tri/san-pham', where: 'Quản trị → Sản phẩm',
+      detail: `${simProducts}/${products} sản phẩm là giả lập (giá vốn, phí, giá bán, điểm trend, CTR, QC). Sửa số thật rồi bỏ ô "Dữ liệu giả lập".` },
+    { group: 'Dữ liệu giả lập', label: 'Xưởng và xưởng dự phòng', status: simSuppliers ? 'GIA_LAP' : suppliers ? 'OK' : 'THIEU', href: '/quan-tri/xuong', where: 'Quản trị → Xưởng',
+      detail: `${simSuppliers}/${suppliers} xưởng giả lập. Xưởng dự phòng của từng sản phẩm đang gán chung, chưa đúng ngành hàng: RYN-SUPPLY có thể đề xuất đổi sai xưởng cho tới khi sửa.` },
+    { group: 'Dữ liệu giả lập', label: 'Dự toán 12 tháng và biên an toàn', status: simCapital ? 'GIA_LAP' : 'OK', href: '/quan-tri/von', where: 'Quản trị → Vốn & dự toán',
+      detail: `${simCapital}/12 tháng là dự toán giả lập. RYN-LOGI không tự khóa nhập hàng dựa trên số giả lập, chỉ đề xuất.` },
+    { group: 'Dữ liệu giả lập', label: 'Phí sàn của kênh bán', status: simFees ? 'GIA_LAP' : 'OK', href: '/quan-tri/kenh-ban', where: 'Quản trị → Kênh bán',
+      detail: `${simFees} kênh có phí sàn giả lập hoặc chưa theo hợp đồng.` },
+
+    // --- Số liệu còn thiếu ---
+    { group: 'Số liệu cần nhập', label: 'Số dư ngân hàng theo tháng', status: noBalance ? 'THIEU' : 'OK', href: '/quan-tri/von', where: 'Quản trị → Vốn & dự toán',
+      detail: `${noBalance}/12 tháng chưa có số dư: chưa so được vốn thực với vốn cần 45%.` },
+    { group: 'Số liệu cần nhập', label: 'Giá đối thủ đã kiểm tra (30 ngày)', status: comps ? 'OK' : 'THIEU', href: '/quan-tri/san-pham', where: 'Quản trị → Sản phẩm → So sánh giá',
+      detail: `${comps} giá đối thủ còn hạn. RYN-PRICE chỉ giảm giá theo đối thủ khi có giá đã kiểm tra.` },
+    { group: 'Số liệu cần nhập', label: 'Kết quả QC từng sản phẩm', status: noQc ? 'THIEU' : 'OK', where: 'Quản trị → Sản phẩm', detail: `${noQc} sản phẩm chưa có tỉ lệ QC đạt.` },
+    { group: 'Số liệu cần nhập', label: 'Kết quả bán thử (CTR)', status: noTrace ? 'THIEU' : 'OK', where: 'API /api/v1/latr/test hoặc Sản phẩm',
+      detail: `${noTrace} sản phẩm chưa có CTR bán thử; RYN-SALES chưa quyết định nhập lớn / dừng được.` },
+    { group: 'Số liệu cần nhập', label: 'Tên sản phẩm 7 ngôn ngữ', status: noI18n ? (env('AI_API_KEY') ? 'THIEU' : 'CHUA_LAM') : 'OK', where: 'Tự động khi có AI_API_KEY',
+      detail: `${noI18n} sản phẩm đang bán chưa có tên tiếng Trung/Anh/...` },
+    { group: 'Số liệu cần nhập', label: 'Danh sách 19 yếu tố TrustScore và trọng số', status: 'GIA_LAP', where: 'lib/trust.ts', detail: 'Đang tạm tính 5 yếu tố.' },
+
+    // --- Chờ nhà cung cấp / quyết định ---
+    { group: 'Chờ API nhà cung cấp', label: 'Nguồn trend ngoài (TikTok Creative Center, Google Trends, 1688, Amazon, Shopee)', status: 'CHUA_LAM', where: 'RYN-TREND',
+      detail: 'RYN-TREND đang xếp hạng bằng dữ liệu trong hệ thống. Cần tài khoản API từng nguồn.' },
+    { group: 'Chờ API nhà cung cấp', label: 'Tìm xưởng tự động (Accio / 1688 Open API)', status: 'CHUA_LAM', where: 'RYN-SUPPLY, /api/v1/supplier-brain/find',
+      detail: 'Hiện chọn từ xưởng đã nhập. Cần tài khoản Alibaba Open Platform.' },
+    { group: 'Chờ API nhà cung cấp', label: 'Camera QC (RynnBrain)', status: 'CHUA_LAM', where: '/api/v1/rynn-brain/check', detail: 'Chưa có tài liệu API công khai. Tạm nhập tay tỉ lệ QC.' },
+    { group: 'Chờ API nhà cung cấp', label: 'Đơn vị vận chuyển (GHN, GHTK, J&T)', status: 'CHUA_LAM', where: 'RYN-LOGI', detail: 'Cần token từng hãng để AI so phí và chọn rẻ nhất.' },
+    { group: 'Chờ API nhà cung cấp', label: 'Ngân hàng (sao kê tự động)', status: 'CHUA_LAM', where: 'Đối soát sao kê', detail: 'Hiện tải sao kê CSV. Cần API doanh nghiệp của ngân hàng.' },
+    { group: 'Chờ API nhà cung cấp', label: 'Zalo OA, email duyệt', status: 'CHUA_LAM', where: 'ZALO_OA_ID, ZALO_ACCESS_TOKEN, SMTP_*', detail: 'Spec dùng Zalo OA + email thay Telegram. Cần tài khoản OA và SMTP.' },
+    { group: 'Chờ API nhà cung cấp', label: 'Quảng cáo và video (TikTok/FB/Google Ads, HeyGen, CapCut)', status: 'CHUA_LAM', where: 'RYN-SALES', detail: 'Cần tài khoản quảng cáo và API video.' },
+    { group: 'Chờ API nhà cung cấp', label: 'API các sàn (Shopee, TikTok Shop, Lazada, 9mua)', status: 'CHUA_LAM', href: '/quan-tri/kenh-ban', where: 'lib/channels.ts', detail: 'Hiện nhập đơn tay / CSV.' },
+    { group: 'Chờ quyết định', label: 'Xác thực 2 lớp và nhà đầu tư duyệt Cấp 5', status: 'CHUA_LAM', where: 'Kiểm soát chi', detail: 'Đang dùng nhập lại mật khẩu cho khoản lớn.' },
+  ];
+}
+
+export const STATUS_TEXT: Record<SetupStatus, [string, string]> = {
+  OK: ['Đã có', 'ok'], THIEU: ['Cần nhập', 'bad'], GIA_LAP: ['Giả lập, sửa sau', 'warn'], CHUA_LAM: ['Chờ nhà cung cấp', 'orange'],
+};

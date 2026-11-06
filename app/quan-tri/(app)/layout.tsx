@@ -15,12 +15,15 @@ const MENU: { grp: string; items: [string, string, Perm?][] }[] = [
   { grp: 'Điều hành', items: [['/quan-tri', 'Tổng quan'], ['/quan-tri/duyet', 'Chờ duyệt'], ['/quan-tri/don-hang', 'Đơn hàng']] },
   { grp: 'Hàng hóa', items: [['/quan-tri/san-pham', 'Sản phẩm'], ['/quan-tri/xuong', 'Xưởng'], ['/quan-tri/kenh-ban', 'Kênh bán'], ['/quan-tri/bao-gia', 'Yêu cầu báo giá']] },
   { grp: 'Tài chính', items: [['/quan-tri/von', 'Vốn & dự toán', 'finance.view'], ['/quan-tri/doi-soat', 'Đối soát sao kê', 'reconcile.run'], ['/quan-tri/chi-tien', 'Chi tiền'], ['/quan-tri/kiem-soat-chi', 'Kiểm soát chi']] },
-  { grp: 'Hệ thống', items: [['/quan-tri/ai', 'Dịch vụ AI'], ['/quan-tri/nhat-ky', 'Nhật ký', 'audit.view'], ['/quan-tri/nguoi-dung', 'Người dùng', 'users.manage'], ['/quan-tri/tai-khoan', 'Đổi mật khẩu']] },
+  { grp: 'Hệ thống', items: [['/quan-tri/ai', 'AI tự động'], ['/quan-tri/can-nhap', 'Thông tin cần nhập'], ['/quan-tri/nhat-ky', 'Nhật ký', 'audit.view'], ['/quan-tri/nguoi-dung', 'Người dùng', 'users.manage'], ['/quan-tri/tai-khoan', 'Đổi mật khẩu']] },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser();
   const pending = await one<{ n: number }>("SELECT count(*)::int AS n FROM wholesale_orders WHERE approval_status='PENDING'");
+  const aiPending = await one<{ n: number }>("SELECT count(*)::int AS n FROM agent_actions WHERE status='DE_XUAT'");
+  const badge = (href: string) =>
+    href === '/quan-tri/duyet' && pending?.n ? ` (${pending.n})` : href === '/quan-tri/ai' && aiPending?.n ? ` (${aiPending.n})` : '';
   return (
     <div className="admin">
       <aside className="side">
@@ -29,7 +32,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <div key={g.grp}>
             <div className="grp">{g.grp}</div>
             {g.items.filter(([, , p]) => !p || can(u, p)).map(([href, label]) => (
-              <Link key={href} href={href}>{label}{href === '/quan-tri/duyet' && pending?.n ? ` (${pending.n})` : ''}</Link>
+              <Link key={href} href={href}>{label}{badge(href)}</Link>
             ))}
           </div>
         ))}

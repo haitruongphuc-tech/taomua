@@ -4,6 +4,7 @@ import { one, q } from '@/lib/db';
 import { short, pct, vnd } from '@/lib/format';
 import { workingCapital } from '@/lib/capital';
 import Flash from '@/components/Flash';
+import { setupItems } from '@/lib/setup-status';
 
 export default async function Overview({ searchParams }: { searchParams: { ok?: string; loi?: string } }) {
   const u = await requireUser();
@@ -31,6 +32,12 @@ export default async function Overview({ searchParams }: { searchParams: { ok?: 
   if (lastRecon?.status === 'LECH') alerts.push({ tone: 'bad', text: <>Đối soát gần nhất lệch {pct(lastRecon.diff_pct)}. <Link href="/quan-tri/doi-soat">Xem</Link></> });
   if (fin && m.cp > 0 && margin < 20) alerts.push({ tone: 'warn', text: <>Biên ròng tháng {pct(margin)} dưới mức an toàn 20%.</> });
   if (!process.env.TELEGRAM_BOT_TOKEN) alerts.push({ tone: 'warn', text: 'Chưa cấu hình bot Telegram: yêu cầu duyệt chỉ hiện trên web.' });
+  const ai = await one(`SELECT count(*) FILTER (WHERE status='DE_XUAT')::int AS cho, count(*) FILTER (WHERE status='TIN' AND severity='DANGER')::int AS nguy,
+      (SELECT max(started_at) FROM agent_runs) AS last FROM agent_actions`);
+  if (ai.cho > 0 || ai.nguy > 0) alerts.push({ tone: ai.nguy > 0 ? 'bad' : 'warn', text: <>AI: <b>{ai.cho}</b> đề xuất chờ duyệt{ai.nguy > 0 ? <>, <b>{ai.nguy}</b> cảnh báo đỏ</> : ''}. <Link href="/quan-tri/ai">Duyệt One-Tap</Link></> });
+  if (!ai.last || Date.now() - new Date(ai.last).getTime() > 12 * 3600_000) alerts.push({ tone: 'warn', text: <>7 agent AI chưa chạy trong 12 giờ qua. <Link href="/quan-tri/ai">Chạy ngay</Link> hoặc bật lịch n8n.</> });
+  const missing = (await setupItems()).filter((i) => i.status === 'THIEU' || i.status === 'GIA_LAP').length;
+  if (missing) alerts.push({ tone: 'warn', text: <>{missing} mục thông tin cần nhập hoặc đang giả lập. <Link href="/quan-tri/can-nhap">Xem danh sách</Link></> });
 
   return (
     <div className="stack">

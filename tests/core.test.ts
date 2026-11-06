@@ -126,3 +126,57 @@ describe('chi tiền & nút Tắt/Mở', async () => {
     expect(payoutLevel(250 * M)).toBe(5);
   });
 });
+
+describe('quy tắc 7 agent', async () => {
+  const R = await import('@/lib/agents/rules');
+  const base = { cost: 13000, fee: 4000, input_vat: 0, prices: { 10: 24000, 50: 22000, 100: 21000, 500: 19500 } as any };
+  it('priceForMargin: giá thấp nhất đạt 15%, làm tròn 500 đ', () => {
+    const p = R.priceForMargin(17000, 0);
+    expect(p % 500).toBe(0);
+    expect(calcMargin({ revenue: p, cost: 17000 }).marginOnCost).toBeGreaterThanOrEqual(15);
+    expect(calcMargin({ revenue: p - 500, cost: 17000 }).marginOnCost).toBeLessThan(15);
+  });
+  it('raiseToFloor nâng bậc thấp, giữ thứ tự mua nhiều rẻ hơn', () => {
+    const n = R.raiseToFloor(base)!;
+    expect(n[500]).toBeGreaterThan(19500);
+    expect(n[10] >= n[50] && n[50] >= n[100] && n[100] >= n[500]).toBe(true);
+    expect(R.raiseToFloor({ ...base, prices: { 10: 40000, 50: 38000, 100: 36000, 500: 34000 } as any })).toBeNull();
+  });
+  it('competitorCut giảm 2% nhưng không xuống dưới sàn', () => {
+    const p = { ...base, prices: { 10: 40000, 50: 38000, 100: 36000, 500: 34000 } as any };
+    expect(R.competitorCut(p, 35000, 10)![10]).toBe(39000);
+    expect(R.competitorCut(p, 41000, 10)).toBeNull();
+    const floor = R.priceForMargin(17000, 0);
+    expect(R.competitorCut({ ...base, prices: { 10: floor, 50: floor, 100: floor, 500: floor } as any }, 1000, 10)).toBeNull();
+  });
+  it('xưởng: chỉ đổi khi xưởng chính không đạt và có dự phòng đạt', () => {
+    const a = { id: 'a', name: 'A', trust_score: 70, defect_rate: 0.04 };
+    const b = { id: 'b', name: 'B', trust_score: 90, defect_rate: 0.01 };
+    const c = { id: 'c', name: 'C', trust_score: 95, defect_rate: 0.03 };
+    expect(R.pickBackup(a, [c, b])?.id).toBe('b');
+    expect(R.pickBackup(b, [a])).toBeNull();
+    expect(R.pickBackup(a, [c])).toBeNull();
+  });
+  it('bán thử, vốn, giá vốn tăng', () => {
+    expect(R.latrDecision(4.2)).toBe('SCALE');
+    expect(R.latrDecision(1.5)).toBe('STOP');
+    expect(R.latrDecision(2.5)).toBeNull();
+    expect(R.latrDecision(null)).toBeNull();
+    expect(R.capitalDecision(19)).toBe('LOCK');
+    expect(R.capitalDecision(22)).toBe('WARN');
+    expect(R.capitalDecision(30)).toBe('SAFE');
+    expect(R.costJumped(100, 110)).toBe(true);
+    expect(R.costJumped(100, 109)).toBe(false);
+  });
+  it('khớp yêu cầu báo giá theo SKU hoặc tên không dấu', () => {
+    const ps = [{ sku: 'AO-3D', name: 'Áo thun in 3D form rộng' }, { sku: 'THAU-304', name: 'Thau rửa bát inox 304' }];
+    expect(R.matchProduct('cần 200 cái thau rua bat inox', ps)?.sku).toBe('THAU-304');
+    expect(R.matchProduct('báo giá AO-3D size L', ps)?.sku).toBe('AO-3D');
+    expect(R.matchProduct('máy xay sinh tố', ps)).toBeNull();
+  });
+  it('đủ 4 kịch bản đàm phán tiếng Trung kèm tiếng Việt', () => {
+    const s = R.negotiationScripts({ productVi: 'Thau', priceCny: 5, targetCny: 4.5, moq: 500, testQty: 50 });
+    expect(s.map((x) => x.ten)).toEqual(['Giá', 'MOQ', 'Chất lượng', 'Thanh toán']);
+    expect(s[0].zh).toContain('4.5');
+  });
+});

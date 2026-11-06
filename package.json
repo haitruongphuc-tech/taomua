@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "db:local": "node scripts/local-db.mjs",
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "tsx scripts/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "agents": "tsx scripts/run-agents.ts"
   },
   "dependencies": {
     "next": "14.2.35",
@@ -21,6 +23,7 @@
     "@types/pg": "8.11.10",
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5",
+    "embedded-postgres": "17.10.0-beta.17",
     "tsx": "^4.19.2",
     "typescript": "5.7.2",
     "vitest": "2.1.9"

@@ -292,3 +292,50 @@ CREATE TABLE IF NOT EXISTS audit_log (
   at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS audit_at ON audit_log(at DESC);
+
+-- ===== 7 AI agent tự động (lib/agents). Chạy 6 giờ/lần qua n8n hoặc nút "Chạy ngay". =====
+ALTER TABLE products ADD COLUMN IF NOT EXISTS name_i18n JSONB NOT NULL DEFAULT '{}';
+
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trigger     TEXT NOT NULL,                 -- 'TAY' (bấm nút), 'LICH' (n8n / lịch), 'API'
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ,
+  status      TEXT NOT NULL DEFAULT 'DANG_CHAY' CHECK (status IN ('DANG_CHAY','XONG','LOI')),
+  summary     JSONB NOT NULL DEFAULT '{}',
+  error       TEXT
+);
+
+-- Hàng đợi One-Tap: đề xuất, cảnh báo, việc AI đã tự làm.
+CREATE TABLE IF NOT EXISTS agent_actions (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id        UUID REFERENCES agent_runs(id) ON DELETE SET NULL,
+  agent         TEXT NOT NULL,               -- RYN-TREND ... RYN-LOGI
+  kind          TEXT NOT NULL,               -- PRICE_CHANGE, SWITCH_SUPPLIER, PRODUCT_STATUS, CONTROL_SET, RFQ_QUOTE, SUPPLIER_TRUST, NOTE
+  severity      TEXT NOT NULL DEFAULT 'INFO' CHECK (severity IN ('INFO','WARN','DANGER')),
+  title         TEXT NOT NULL,
+  detail        JSONB NOT NULL DEFAULT '{}',
+  entity        TEXT,
+  entity_id     TEXT,
+  level         INT CHECK (level BETWEEN 1 AND 5),   -- cấp duyệt khi cần người duyệt
+  status        TEXT NOT NULL CHECK (status IN ('DE_XUAT','TU_DONG','DA_DUYET','TU_CHOI','TIN','DA_XEM','LOI')),
+  dedupe_key    TEXT,
+  decided_by    UUID REFERENCES users(id),
+  decided_label TEXT,
+  decided_at    TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS agent_actions_status ON agent_actions(status, created_at DESC);
+-- Một đề xuất / tin còn mở thì không tạo lại mỗi lần chạy.
+CREATE UNIQUE INDEX IF NOT EXISTS agent_actions_open_dedupe ON agent_actions(dedupe_key) WHERE status IN ('DE_XUAT','TIN');
+
+-- Lịch sử giá vốn để RYN-TRACE phát hiện xưởng tăng giá.
+CREATE TABLE IF NOT EXISTS product_cost_history (
+  id          BIGSERIAL PRIMARY KEY,
+  product_id  UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  supplier_id UUID REFERENCES suppliers(id),
+  cost        BIGINT NOT NULL,
+  fee         BIGINT NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS cost_history_product ON product_cost_history(product_id, recorded_at DESC);
