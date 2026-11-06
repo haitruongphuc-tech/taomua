@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { q, one } from '@/lib/db';
 import { dt } from '@/lib/format';
-import { aiEnabled } from '@/lib/ai';
+import { aiEnabled, aiLocalLlm, aiConfig } from '@/lib/ai';
 import { AGENTS, type AgentCode } from '@/lib/agents';
 import { AGENT_CODES, isAgent } from '@/lib/agent-chat';
 import AgentChat, { type Line } from './AgentChat';
@@ -15,15 +15,21 @@ export default async function AgentTraining({ searchParams }: { searchParams: { 
   const agent: AgentCode = searchParams.agent && isAgent(searchParams.agent) ? searchParams.agent : 'RYN-SALES';
   const counts = Object.fromEntries((await q<{ agent: string; n: number }>(
     'SELECT agent, count(*)::int AS n FROM agent_lessons WHERE active GROUP BY agent')).map((r) => [r.agent, r.n]));
-  const hist = (await q('SELECT id, sender, body, user_label, mode, created_at FROM agent_chat WHERE agent=$1 ORDER BY created_at DESC LIMIT 60', [agent])).reverse();
-  const initial: Line[] = hist.map((h) => ({ id: h.id, sender: h.sender, body: h.body, who: h.user_label, mode: h.mode, at: dt(h.created_at) }));
+  const hist = (await q('SELECT id, sender, body, user_label, mode, rating, created_at FROM agent_chat WHERE agent=$1 ORDER BY created_at DESC LIMIT 60', [agent])).reverse();
+  const initial: Line[] = hist.map((h) => ({ id: Number(h.id), sender: h.sender, body: h.body, who: h.user_label, mode: h.mode, rating: h.rating, at: dt(h.created_at) }));
+  const beat = await one('SELECT beat_at, info FROM ai_heartbeat WHERE worker=$1', ['ai-247']);
+  const lastRun = await one('SELECT started_at FROM agent_runs ORDER BY started_at DESC LIMIT 1');
+  const alive = !!beat && Date.now() - new Date(beat.beat_at).getTime() < (Number(beat.info?.interval_min ?? 60) * 2 + 5) * 60_000;
+  const cfg = aiConfig();
+  const brain = aiLocalLlm() ? `AI ngôn ngữ LOCAL (${cfg.model})` : aiEnabled() ? `AI ngôn ngữ API (${cfg.model})` : 'AI LOCAL thuật toán (BM25 + Naive Bayes)';
   const lessons = await q('SELECT id, kind, question, answer, used, created_label, created_at FROM agent_lessons WHERE agent=$1 AND active ORDER BY created_at DESC LIMIT 100', [agent]);
   const sales = agent === 'RYN-SALES';
   const unanswered = sales ? await q(`SELECT c.message, max(c.created_at) AS at FROM chat_logs c
     WHERE c.answered_by='CHUYEN_NGUOI' AND c.created_at > now() - interval '30 days'
     AND NOT EXISTS (SELECT 1 FROM agent_lessons l WHERE l.agent='RYN-SALES' AND l.kind='HOI_DAP' AND l.active AND lower(l.question)=lower(c.message))
     GROUP BY c.message ORDER BY at DESC LIMIT 20`) : [];
-  const rate = sales ? await one<{ total: number; ai: number }>(`SELECT count(*)::int AS total, count(*) FILTER (WHERE answered_by <> 'CHUYEN_NGUOI')::int AS ai
+  const rate = sales ? await one<{ total: number; ai: number; local: number; llm: number }>(`SELECT count(*)::int AS total, count(*) FILTER (WHERE answered_by <> 'CHUYEN_NGUOI')::int AS ai,
+    count(*) FILTER (WHERE answered_by = 'AI_LOCAL' OR intent_by = 'AI_LOCAL')::int AS local, count(*) FILTER (WHERE answered_by = 'AI_NGON_NGU')::int AS llm
     FROM chat_logs WHERE created_at > now() - interval '30 days'`) : null;
 
   return (
@@ -36,8 +42,16 @@ export default async function AgentTraining({ searchParams }: { searchParams: { 
         Khung chat riêng của CEO, Trưởng nhóm và Kỹ sư AI với từng agent. Lệnh hiểu ngay: <b>chạy</b>, <b>báo cáo</b>, <b>nhiệm vụ</b>, <b>đã học gì</b>,
         {' '}<b>dạy: &lt;quy tắc&gt;</b>, <b>hỏi: &lt;câu hỏi&gt; =&gt; &lt;câu trả lời&gt;</b>, <b>quên #&lt;số&gt;</b>.
         {' '}Câu hỏi - đáp dạy cho <b>RYN-SALES</b> được CSKH AI dùng trả lời khách ở khung chat cửa hàng.
-        {' '}<span className={`badge ${aiEnabled() ? 'ok' : 'warn'}`}>{aiEnabled() ? 'AI ngôn ngữ: bật' : 'Câu tự do: GIẢ LẬP (chưa có AI_API_KEY)'}</span>
       </p>
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+        <span className="badge ok">Bộ não: {brain}</span>
+        <span className={`badge ${alive ? 'ok' : 'warn'}`}>
+          AI 24/7: {alive ? `đang chạy, nhịp gần nhất ${dt(beat!.beat_at)}` : 'chưa bật vòng nền (npm run ai:247)'}
+        </span>
+        <span className="badge">7 agent chạy gần nhất: {lastRun ? dt(lastRun.started_at) : 'chưa chạy'}</span>
+        <span className="badge">Khung chat khách & chat agent: trả lời ngay 24/7</span>
+        <a className="btn secondary sm" href="/quan-tri/huan-luyen-agent/xuat">⬇ Tải dữ liệu huấn luyện (JSONL)</a>
+      </div>
       <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
         {AGENT_CODES.map((c) => (
           <Link key={c} href={`/quan-tri/huan-luyen-agent?agent=${c}`} className={`btn sm ${c === agent ? '' : 'secondary'}`}>
@@ -53,7 +67,7 @@ export default async function AgentTraining({ searchParams }: { searchParams: { 
             <div className="card">
               <h3 style={{ marginTop: 0 }}>Khách hỏi, AI chưa trả lời được</h3>
               <p className="small muted">
-                30 ngày: {rate?.total ?? 0} câu khách hỏi, AI tự trả lời {rate?.total ? Math.round((100 * rate.ai) / rate.total) : 0}%. Dạy câu trả lời chuẩn để lần sau AI tự trả lời.
+                30 ngày: {rate?.total ?? 0} câu khách hỏi, AI tự trả lời {rate?.total ? Math.round((100 * rate.ai) / rate.total) : 0}% (AI LOCAL {rate?.local ?? 0}, AI ngôn ngữ {rate?.llm ?? 0}). Dạy câu trả lời chuẩn để lần sau AI tự trả lời.
               </p>
               {unanswered.length === 0 && <div className="small muted">Không có câu nào cần dạy.</div>}
               {unanswered.map((r) => (

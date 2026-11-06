@@ -10,7 +10,8 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "tsx scripts/seed.ts",
     "test": "vitest run",
-    "agents": "tsx scripts/run-agents.ts"
+    "agents": "tsx scripts/run-agents.ts",
+    "ai:247": "tsx scripts/ai-247.ts"
   },
   "dependencies": {
     "next": "14.2.35",

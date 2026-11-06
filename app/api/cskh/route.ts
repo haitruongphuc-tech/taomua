@@ -15,8 +15,9 @@ export async function POST(req: Request) {
   try {
     const r = await answer(message, { phone: b?.phone ? String(b.phone).slice(0, 25) : undefined });
     const ms = Date.now() - t0;
-    await q('INSERT INTO chat_logs(session, message, reply, intent, answered_by, ms) VALUES ($1,$2,$3,$4,$5,$6)', [session, message, r.reply, r.intent, r.answeredBy, ms]);
-    return NextResponse.json({ ...r, ms });
+    await q('INSERT INTO chat_logs(session, message, reply, intent, answered_by, ms, intent_by, lesson_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [session, message, r.reply, r.intent, r.answeredBy, ms, r.intentBy ?? 'QUY_TAC', r.lessonId ?? null]);
+    return NextResponse.json({ reply: r.reply, intent: r.intent, links: r.links, answeredBy: r.answeredBy, ms });
   } catch (e) {
     await logError('api/cskh', e);
     return NextResponse.json({ reply: 'Hệ thống đang bận, bạn để lại liên hệ ở trang Báo lỗi để nhân viên gọi lại nhé.', intent: 'KHAC', links: [{ label: 'Để lại liên hệ', href: '/bao-loi' }] });

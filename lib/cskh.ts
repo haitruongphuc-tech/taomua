@@ -1,6 +1,7 @@
 // CSKH AI 95% (spec RYN-SALES, module CSKH): phân loại câu hỏi và trả lời bằng dữ liệu thật trong hệ thống.
 // Hỏi giá sỉ / tồn kho / trạng thái đơn / vận chuyển / thanh toán / hóa đơn → AI trả lời ngay.
-// Khiếu nại, hoàn tiền → hướng dẫn gửi khiếu nại (AI phân loại, mức cao chuyển CEO). Không hiểu → AI ngôn ngữ (nếu có khóa) hoặc chuyển người.
+// Khiếu nại, hoàn tiền → hướng dẫn gửi khiếu nại (AI phân loại, mức cao chuyển CEO).
+// Câu tự do → AI LOCAL (Naive Bayes đoán ý định, BM25 tìm câu đã dạy) → AI ngôn ngữ có "trí nhớ" bài học (RAG) nếu có khóa → chuyển người.
 import { q } from './db';
 import { fold } from './sourcing';
 import { matchProduct } from './agents/rules';
@@ -8,10 +9,10 @@ import { findOrderForCustomer } from './orders';
 import { classifyIssue } from './complaints';
 import { chat, aiEnabled } from './ai';
 import { LEGAL } from './legal';
-import { trainedAnswer, lessonRules } from './lessons';
+import { trainedAnswer, lessonRules, localAnswer, searchLessons, intentModel } from './lessons';
 
 export type Intent = 'CHAO' | 'GIA' | 'TON_KHO' | 'DON_HANG' | 'VAN_CHUYEN' | 'THANH_TOAN' | 'HOA_DON' | 'KHIEU_NAI' | 'NGUOI_THAT' | 'KHAC';
-export type Reply = { reply: string; intent: Intent; links: { label: string; href: string }[]; answeredBy: 'AI_QUY_TAC' | 'AI_NGON_NGU' | 'CHUYEN_NGUOI' };
+export type Reply = { reply: string; intent: Intent; links: { label: string; href: string }[]; answeredBy: 'AI_QUY_TAC' | 'AI_LOCAL' | 'AI_NGON_NGU' | 'CHUYEN_NGUOI'; intentBy?: 'QUY_TAC' | 'AI_LOCAL'; lessonId?: number };
 
 const w = (t: string, list: string[]) => list.some((x) => t.includes(` ${x} `));
 
@@ -52,14 +53,21 @@ const STATUS: Record<string, string> = {
 
 export async function answer(message: string, ctx: { phone?: string } = {}): Promise<Reply> {
   const msg = message.trim().slice(0, 1000);
-  const intent = detectIntent(msg);
+  let intent = detectIntent(msg);
+  let intentBy: Reply['intentBy'] = 'QUY_TAC';
+  let lessonId: number | undefined;
   const links: Reply['links'] = [];
-  const done = (reply: string, by: Reply['answeredBy'] = 'AI_QUY_TAC'): Reply => ({ reply, intent, links, answeredBy: by });
+  const done = (reply: string, by: Reply['answeredBy'] = 'AI_QUY_TAC'): Reply => ({ reply, intent, links, answeredBy: by, intentBy, lessonId });
 
-  // CEO / kỹ sư đã dạy câu trả lời chuẩn (Quản trị → Chat & huấn luyện agent) thì dùng trước; tra đơn cụ thể vẫn tra dữ liệu thật.
-  if (!/TM\d{4,}/i.test(msg)) {
+  // CEO / kỹ sư đã dạy câu trả lời chuẩn (Quản trị → Chat & huấn luyện agent) thì dùng trước; tra đơn cụ thể và khiếu nại vẫn theo luồng thật.
+  if (!/TM\d{4,}/i.test(msg) && intent !== 'KHIEU_NAI') {
     const taught = await trainedAnswer(msg);
-    if (taught) return done(taught);
+    if (taught) { lessonId = taught.id; return done(taught.answer); }
+  }
+  // Luật không nhận ra ý định → AI LOCAL (Naive Bayes, tự học từ nhật ký chat) đoán.
+  if (intent === 'KHAC') {
+    const p = (await intentModel()).nb.predict(msg);
+    if (p && p.prob >= 0.7 && p.label !== 'KHAC') { intent = p.label as Intent; intentBy = 'AI_LOCAL'; }
   }
 
   if (intent === 'DON_HANG') {
@@ -106,12 +114,17 @@ export async function answer(message: string, ctx: { phone?: string } = {}): Pro
   }
   if (intent === 'CHAO') return done('Xin chào! Mình là trợ lý AI của taomua. Hỏi mình giá sỉ, tình trạng đơn (mã TM + số điện thoại), vận chuyển, thanh toán, hóa đơn hoặc khiếu nại nhé. taomua cùng vui với bạn!');
 
-  // Câu tự do: AI ngôn ngữ trả lời trong phạm vi thông tin công khai; không có khóa thì chuyển người.
+  // Câu tự do: AI LOCAL tìm câu đã dạy gần nhất (BM25); đủ tin cậy thì trả lời ngay.
+  const local = await localAnswer(msg);
+  if (local) { lessonId = local.id; return done(local.answer, 'AI_LOCAL'); }
+  // AI ngôn ngữ (khóa API hoặc AI chạy local) trả lời với "trí nhớ" là các bài học gần nhất; không có thì chuyển người.
   if (aiEnabled()) {
+    const memory = (await searchLessons('RYN-SALES', msg, 4)).filter((l) => l.kind === 'HOI_DAP')
+      .map((l) => `- Hỏi: ${l.question}\n  Đáp: ${l.answer}`).join('\n');
     const cats = (await q('SELECT DISTINCT category FROM products WHERE published')).map((r) => r.category).join(', ');
     const rules = (await lessonRules('RYN-SALES')).map((r) => `- ${r}`).join('\n');
     const out = await chat([
-      { role: 'system', content: `Bạn là trợ lý CSKH của taomua.com (sàn sỉ, ${LEGAL.name}). Trả lời ngắn, lịch sự, cùng ngôn ngữ với khách. Chỉ dùng thông tin: giá sỉ 4 bậc 10/50/100/500 cái đã gồm VAT 8%; tiền được giữ đến khi khách xác nhận nhận hàng; ngành hàng: ${cats}. Không bịa giá, không hứa giảm giá, không hỏi thông tin thẻ/mật khẩu. Nếu không chắc, mời khách gửi yêu cầu báo giá ở /bao-gia hoặc để lại liên hệ ở /bao-loi.${rules ? `\nQuy tắc CEO đã dạy (bắt buộc):\n${rules}` : ''}` },
+      { role: 'system', content: `Bạn là trợ lý CSKH của taomua.com (sàn sỉ, ${LEGAL.name}). Trả lời ngắn, lịch sự, cùng ngôn ngữ với khách. Chỉ dùng thông tin: giá sỉ 4 bậc 10/50/100/500 cái đã gồm VAT 8%; tiền được giữ đến khi khách xác nhận nhận hàng; ngành hàng: ${cats}. Không bịa giá, không hứa giảm giá, không hỏi thông tin thẻ/mật khẩu. Nếu không chắc, mời khách gửi yêu cầu báo giá ở /bao-gia hoặc để lại liên hệ ở /bao-loi.${rules ? `\nQuy tắc CEO đã dạy (bắt buộc):\n${rules}` : ''}${memory ? `\nCâu trả lời chuẩn CEO đã dạy (ưu tiên dùng):\n${memory}` : ''}` },
       { role: 'user', content: msg },
     ]).catch(() => null);
     if (out) return done(out.slice(0, 1200), 'AI_NGON_NGU');

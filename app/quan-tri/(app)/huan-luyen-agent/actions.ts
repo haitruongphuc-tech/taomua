@@ -46,3 +46,11 @@ export async function forgetLesson(fd: FormData) {
   await audit(actorOf(u), 'agent.forget', 'agent_lesson', String(id), {});
   revalidatePath(PATH);
 }
+
+/** Chấm câu trả lời của agent: 👍 thành ví dụ mẫu cho AI ngôn ngữ và dữ liệu tinh chỉnh; 👎 thì dạy lại câu đúng. */
+export async function rateReply(id: number, rating: 1 | -1) {
+  const u = await requireUser('agents.train');
+  if (!Number.isInteger(id) || (rating !== 1 && rating !== -1)) return;
+  await q("UPDATE agent_chat SET rating=$2 WHERE id=$1 AND sender='AGENT'", [id, rating]);
+  await audit(actorOf(u), 'agent.rate', 'agent_chat', String(id), { rating });
+}

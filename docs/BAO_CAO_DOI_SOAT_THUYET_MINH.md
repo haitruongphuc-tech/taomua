@@ -73,7 +73,7 @@ Dữ liệu sản phẩm, xưởng, giá, dự toán, bảng giá ship, chiến 
 
 Lịch 6 giờ: `n8n/taomua_7_agents_6h.json` hoặc `npm run agents`.
 
-**Khung chat**: (1) khách hàng ↔ CSKH AI ở mọi trang cửa hàng (nút "Hỏi AI"); (2) CEO / Trưởng nhóm / **Kỹ sư AI** ↔ từng agent ở `/quan-tri/huan-luyen-agent`: hỏi việc, ra lệnh chạy, dạy quy tắc (`dạy: …`), dạy câu hỏi - đáp (`hỏi: … => …`), bỏ bài (`quên #số`). Câu đã dạy cho RYN-SALES được CSKH dùng trả lời khách ngay; câu khách hỏi mà AI chưa trả lời được hiện ra để dạy. Câu tự do: AI ngôn ngữ khi có khóa, chưa có thì GIẢ LẬP.
+**Khung chat**: (1) khách hàng ↔ CSKH AI ở mọi trang cửa hàng (nút "Hỏi AI"); (2) CEO / Trưởng nhóm / **Kỹ sư AI** ↔ từng agent ở `/quan-tri/huan-luyen-agent`: hỏi việc, ra lệnh chạy, dạy quy tắc (`dạy: …`), dạy câu hỏi - đáp (`hỏi: … => …`), bỏ bài (`quên #số`). Câu đã dạy cho RYN-SALES được CSKH dùng trả lời khách ngay; câu khách hỏi mà AI chưa trả lời được hiện ra để dạy. Câu tự do: **AI LOCAL** (BM25 + Naive Bayes, `lib/local-ai.ts`) luôn chạy; có AI ngôn ngữ (Ollama local hoặc `AI_API_KEY`) thì trả lời kèm trí nhớ bài học (RAG). Bài học mặc định (giao chủ nhật, 24/7, …) nạp sẵn; chấm 👍/👎; xuất dữ liệu huấn luyện JSONL. **AI 24/7**: `npm run ai:247`.
 
 ## 5. Chồng lấn đã sửa trong lần đối soát này
 

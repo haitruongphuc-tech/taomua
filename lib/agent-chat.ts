@@ -1,9 +1,10 @@
 // Khung chat CEO / Kỹ sư AI ↔ 7 agent: hỏi việc, ra lệnh chạy, và HUẤN LUYỆN (dạy quy tắc, dạy câu hỏi - câu trả lời).
 // Bài học lưu ở agent_lessons; CSKH (RYN-SALES) dùng câu hỏi - đáp đã dạy để trả lời khách, AI ngôn ngữ đọc quy tắc khi có khóa.
-// Chưa có AI_API_KEY: agent trả lời bằng lệnh + dữ liệu thật, câu tự do trả lời GIẢ LẬP (có nhãn).
+// Chưa có AI_API_KEY: AI LOCAL (BM25 trên bài học + việc thật) trả lời câu tự do. Có khóa: AI ngôn ngữ + trí nhớ bài học + câu được chấm 👍.
 import { q, one } from './db';
 import { fold } from './sourcing';
-import { matchLesson, lessonRules } from './lessons';
+import { matchLesson, lessonRules, searchLessons } from './lessons';
+import { Bm25 } from './local-ai';
 export { matchLesson, trainedAnswer, lessonRules } from './lessons';
 import { chat, aiEnabled } from './ai';
 import { AGENTS, runAgents, type AgentCode } from './agents';
@@ -49,7 +50,7 @@ async function recentWork(agent: AgentCode, n = 6) {
     'SELECT title, status, created_at FROM agent_actions WHERE agent=$1 ORDER BY created_at DESC LIMIT $2', [agent, n]);
 }
 
-export type ChatResult = { reply: string; mode: 'LENH' | 'AI_NGON_NGU' | 'GIA_LAP' };
+export type ChatResult = { reply: string; mode: 'LENH' | 'AI_LOCAL' | 'AI_NGON_NGU' | 'GIA_LAP'; id?: number };
 
 /** Agent trả lời một tin của CEO / kỹ sư. Ghi cả hai tin vào agent_chat. */
 export async function talkToAgent(agent: AgentCode, message: string, u: User): Promise<ChatResult> {
@@ -58,8 +59,8 @@ export async function talkToAgent(agent: AgentCode, message: string, u: User): P
   const a = actorOf(u);
   await q("INSERT INTO agent_chat(agent, sender, user_id, user_label, body) VALUES ($1,'NGUOI',$2,$3,$4)", [agent, u.id, a.label, msg]);
   const r = await reply(agent, msg, u);
-  await q("INSERT INTO agent_chat(agent, sender, body, mode) VALUES ($1,'AGENT',$2,$3)", [agent, r.reply, r.mode]);
-  return r;
+  const row = await one<{ id: number }>("INSERT INTO agent_chat(agent, sender, body, mode) VALUES ($1,'AGENT',$2,$3) RETURNING id", [agent, r.reply, r.mode]);
+  return { ...r, id: Number(row!.id) };
 }
 
 async function reply(agent: AgentCode, msg: string, u: User): Promise<ChatResult> {
@@ -108,7 +109,7 @@ async function reply(agent: AgentCode, msg: string, u: User): Promise<ChatResult
     }
   }
 
-  // Câu tự do
+  // Câu tự do: (1) câu hỏi - đáp đã dạy khớp chặt → (2) AI ngôn ngữ có "trí nhớ" (RAG: bài học + việc gần đây) → (3) AI LOCAL (BM25).
   const ls = await q<{ id: number; question: string; answer: string }>(
     "SELECT id, question, answer FROM agent_lessons WHERE agent=$1 AND kind='HOI_DAP' AND active", [agent]);
   const hit = matchLesson(msg, ls);
@@ -116,23 +117,39 @@ async function reply(agent: AgentCode, msg: string, u: User): Promise<ChatResult
     await q('UPDATE agent_lessons SET used = used + 1 WHERE id=$1', [hit.id]);
     return lenh(`${hit.answer}\n(theo bài học #${hit.id})`);
   }
+  const memory = await searchLessons(agent, msg, 5);
+  const works = await q<{ id: string; title: string; status: string }>(
+    'SELECT id, title, status FROM agent_actions WHERE agent=$1 ORDER BY created_at DESC LIMIT 300', [agent]);
   if (aiEnabled()) {
     const rules = await lessonRules(agent);
-    const work = (await recentWork(agent, 10)).map((x) => `- ${x.title} (${STATUS_VI[x.status] ?? x.status})`).join('\n');
+    const work = works.slice(0, 10).map((x) => `- ${x.title} (${STATUS_VI[x.status] ?? x.status})`).join('\n');
+    const good = await q<{ qn: string; an: string }>(`SELECT p.body AS qn, a.body AS an FROM agent_chat a
+      JOIN LATERAL (SELECT body FROM agent_chat h WHERE h.agent=a.agent AND h.sender='NGUOI' AND h.id < a.id ORDER BY h.id DESC LIMIT 1) p ON true
+      WHERE a.agent=$1 AND a.sender='AGENT' AND a.rating=1 ORDER BY a.id DESC LIMIT 3`, [agent]);
     const hist = (await q<{ sender: string; body: string }>('SELECT sender, body FROM agent_chat WHERE agent=$1 ORDER BY created_at DESC LIMIT 8', [agent])).reverse();
     const out = await chat([
       { role: 'system', content: `Bạn là agent ${agent} (${info.name}) của taomua.com, đang báo cáo và được CEO / kỹ sư huấn luyện. Nhiệm vụ: ${info.job}
 Trả lời tiếng Việt, ngắn, cụ thể, chỉ dựa vào dữ liệu dưới đây; không bịa số. Không tự chuyển tiền, không tự quyết thay CEO.
 Quy tắc CEO đã dạy (bắt buộc tuân theo):\n${rules.map((r) => `- ${r}`).join('\n') || '- (chưa có)'}
+Kiến thức liên quan đã dạy:\n${memory.map((m) => m.question ? `- Hỏi: ${m.question} → Đáp: ${m.answer}` : `- ${m.answer}`).join('\n') || '- (chưa có)'}
 Việc gần đây:\n${work || '- (chưa có)'}` },
+      ...good.flatMap((g) => [{ role: 'user' as const, content: g.qn }, { role: 'assistant' as const, content: g.an }]),
       ...hist.slice(0, -1).map((h) => ({ role: h.sender === 'NGUOI' ? 'user' as const : 'assistant' as const, content: h.body })),
       { role: 'user', content: msg },
     ]).catch(() => null);
     if (out) return { reply: out.slice(0, 3000), mode: 'AI_NGON_NGU' };
   }
-  const w = (await recentWork(agent, 3)).map((x) => `• ${x.title}`).join('\n');
+  // AI LOCAL: không cần khóa. Trả lời bằng bài học gần nhất + việc liên quan tìm được trong dữ liệu thật.
+  const best = memory[0];
+  const workIdx = new Bm25(works.map((w) => ({ id: w.id, text: w.title })));
+  const byId = new Map(works.map((w) => [w.id, w]));
+  const related = workIdx.search(msg, 3).filter((r) => r.coverage >= 0.5).map((r) => byId.get(String(r.id))!);
+  const parts: string[] = [];
+  if (best && best.coverage >= 0.5) parts.push(best.question ? `${best.answer} (theo bài học #${best.id})` : `Quy tắc #${best.id}: ${best.answer}`);
+  if (related.length) parts.push(`Việc liên quan:\n${related.map((x) => `• ${x.title} (${STATUS_VI[x.status] ?? x.status})`).join('\n')}`);
+  if (parts.length) return { mode: 'AI_LOCAL', reply: `[AI LOCAL] ${parts.join('\n')}` };
   return {
-    mode: 'GIA_LAP',
-    reply: `[GIẢ LẬP — chưa có AI_API_KEY] ${agent} (${info.name}) đã nhận: "${msg.slice(0, 200)}".\n${w ? `Việc gần nhất:\n${w}\n` : ''}Các lệnh hiểu ngay: "chạy", "báo cáo", "nhiệm vụ", "đã học gì", "dạy: <quy tắc>", "hỏi: <câu hỏi> => <câu trả lời>", "quên #<số>".`,
+    mode: 'AI_LOCAL',
+    reply: `[AI LOCAL] ${agent} chưa được dạy về: "${msg.slice(0, 200)}". Dạy tôi bằng "hỏi: ${msg.slice(0, 80)} => <câu trả lời>" hoặc "dạy: <quy tắc>". Lệnh hiểu ngay: "chạy", "báo cáo", "nhiệm vụ", "đã học gì", "quên #<số>".`,
   };
 }

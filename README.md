@@ -111,6 +111,32 @@ Nút tổng tắt thì không gì tự làm, trừ phân tích dữ liệu. Khô
 - **CEO, Trưởng nhóm, Kỹ sư AI ↔ 7 agent**: *Quản trị → Chat & huấn luyện agent* (`/quan-tri/huan-luyen-agent`). Lệnh: `chạy`, `báo cáo`, `nhiệm vụ`, `đã học gì`, `dạy: <quy tắc>`, `hỏi: <câu hỏi> => <câu trả lời>`, `quên #<số>`. Câu dạy cho RYN-SALES được CSKH dùng trả lời khách. Vai trò mới **Kỹ sư AI** (tạo ở *Người dùng*) được chạy và huấn luyện agent, xem đơn; không có quyền duyệt hay chi tiền.
 - 🏷️ Trang 7 agent đang **đánh dấu chờ CEO đặt tên và chia việc** lại.
 
+## AI 24/7 và AI LOCAL
+
+**3 tầng bộ não** (tự chọn theo cấu hình, không cần sửa code):
+
+1. **AI LOCAL thuật toán** (`lib/local-ai.ts`, luôn bật, không cần khóa, dữ liệu không ra ngoài):
+   tách từ ghép tiếng Việt → **BM25** tìm bài học / câu hỏi mẫu gần nhất → **Naive Bayes** đoán ý định câu khách, tự học thêm từ nhật ký chat thật.
+2. **AI ngôn ngữ LOCAL**: cài Ollama, `ollama pull qwen2.5:7b`, đặt `AI_BASE_URL=http://localhost:11434/v1`, `AI_MODEL=qwen2.5:7b`, để trống `AI_API_KEY`.
+3. **AI ngôn ngữ API** (Qwen / OpenAI…): nhập `AI_API_KEY`.
+
+Tầng 2 và 3 trả lời với "trí nhớ" (RAG): quy tắc đã dạy + bài hỏi - đáp gần nhất (BM25) + câu trả lời được chấm 👍 làm ví dụ mẫu.
+
+**Huấn luyện thực chiến**:
+- Dạy trong chat (`dạy: …`, `hỏi: … => …`; một câu hỏi ghi nhiều cách hỏi bằng dấu `|`).
+- Chấm 👍 / 👎 từng câu trả lời; 👎 mở sẵn dòng dạy lại.
+- Dạy câu khách hỏi mà AI chưa trả lời được.
+- Nút **Tải dữ liệu huấn luyện (JSONL)** xuất bộ dữ liệu chuẩn chat để tinh chỉnh (fine-tune) mô hình khi có `AI_API_KEY`.
+
+**Bài học mặc định** (nạp khi chạy lược đồ, sửa / Quên trên trang huấn luyện): giao chủ nhật, làm việc 24/7, lễ tết, thời gian giao, quốc tế, mua lẻ, chiết khấu, in logo, an toàn thanh toán, đổi trả, COD, đại lý; quy tắc 24/7 cho cả 7 agent.
+
+**Chạy 24/7**: khung chat khách và chat agent luôn trả lời ngay. Vòng nền chạy 7 agent mỗi `AI_247_INTERVAL_MIN` phút (mặc định 60) và làm mới AI LOCAL; trang huấn luyện hiện nhịp tim:
+
+```
+npm run ai:247
+pm2 start npm --name taomua-ai -- run ai:247   # giữ chạy nền trên máy chủ
+```
+
 ## Chế độ GIẢ LẬP
 
 Chưa có tài khoản thật thì mọi dịch vụ ngoài chạy **giả lập** để thấy trọn luồng 95% tự động: trend 20 nguồn, tìm xưởng 1688, camera QC, video 7 ngôn ngữ, tìm bằng ảnh, cổng thanh toán 9PAY / VNPay / Momo / Alipay, QR chuyển khoản, chuyển khoản chi, hóa đơn điện tử, Zalo / email.

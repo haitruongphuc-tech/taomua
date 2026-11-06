@@ -582,3 +582,64 @@ CREATE TABLE IF NOT EXISTS agent_chat (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS agent_chat_agent ON agent_chat(agent, created_at DESC);
+
+-- ===== AI LOCAL + huấn luyện thực chiến =====
+ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS intent_by TEXT NOT NULL DEFAULT 'QUY_TAC';  -- QUY_TAC / AI_LOCAL: mô hình chỉ tự học từ câu luật nhận đúng
+ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS lesson_id BIGINT;                         -- bài học AI dùng để trả lời
+ALTER TABLE chat_logs DROP CONSTRAINT IF EXISTS chat_logs_answered_by_check;
+ALTER TABLE chat_logs ADD CONSTRAINT chat_logs_answered_by_check CHECK (answered_by IN ('AI_QUY_TAC','AI_LOCAL','AI_NGON_NGU','CHUYEN_NGUOI'));
+ALTER TABLE agent_chat DROP CONSTRAINT IF EXISTS agent_chat_mode_check;
+ALTER TABLE agent_chat ADD CONSTRAINT agent_chat_mode_check CHECK (mode IN ('LENH','AI_LOCAL','AI_NGON_NGU','GIA_LAP'));
+ALTER TABLE agent_chat ADD COLUMN IF NOT EXISTS rating SMALLINT CHECK (rating IN (-1, 1));   -- CEO / kỹ sư chấm câu trả lời: dữ liệu huấn luyện
+ALTER TABLE agent_lessons ADD COLUMN IF NOT EXISTS seed_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS agent_lessons_seed ON agent_lessons(seed_key);
+-- Lịch AI 24/7: mỗi vòng chạy ghi 1 dòng để trang huấn luyện biết AI còn sống.
+CREATE TABLE IF NOT EXISTS ai_heartbeat (
+  worker     TEXT PRIMARY KEY,
+  beat_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  info       JSONB NOT NULL DEFAULT '{}'
+);
+
+-- Bài học mặc định (CEO sửa / "Quên" trên trang Chat & huấn luyện agent). Đã quên thì chạy lại lược đồ không thêm lại.
+INSERT INTO agent_lessons(seed_key, agent, kind, question, answer, created_label) VALUES
+ ('cskh-chu-nhat', 'RYN-SALES', 'HOI_DAP', 'Có giao hàng chủ nhật không | Cuối tuần thứ 7 chủ nhật có giao không | Chủ nhật có ship không',
+  'Có ạ. taomua làm việc 24/7: AI nhận đơn, trả lời và theo dõi đơn cả thứ 7, chủ nhật và ngày lễ. Hàng vẫn giao chủ nhật, nội thành HCM có giao nhanh; tỉnh xa và quốc tế theo lịch hãng vận chuyển, mã vận đơn hiện khi bạn tra cứu đơn.', 'Mặc định taomua'),
+ ('cskh-24-7', 'RYN-SALES', 'HOI_DAP', 'taomua làm việc mấy giờ | Có làm ban đêm không | Làm việc 24/7 không | Giờ mở cửa | Khuya có trả lời không',
+  'taomua.com hoạt động 24/7. Trợ lý AI trả lời ngay mọi lúc, nhận đơn và báo giá cả ban đêm, thứ 7, chủ nhật. Việc cần nhân viên (khiếu nại, đơn lớn) được xử lý trong giờ làm việc, khiếu nại phản hồi trong 2 giờ.', 'Mặc định taomua'),
+ ('cskh-ngay-le', 'RYN-SALES', 'HOI_DAP', 'Ngày lễ tết có giao hàng không | Tết có làm việc không | Ngày lễ có ship không',
+  'Có ạ, taomua vẫn nhận đơn và trả lời 24/7 dịp lễ tết. Ngày giao phụ thuộc lịch nghỉ của hãng vận chuyển; taomua báo trước nếu đơn của bạn bị chậm.', 'Mặc định taomua'),
+ ('cskh-thoi-gian-giao', 'RYN-SALES', 'HOI_DAP', 'Bao lâu thì nhận được hàng | Giao mất mấy ngày | Khi nào hàng tới nơi',
+  'Thời gian tham khảo: nội thành HCM 1–2 ngày, các tỉnh 2–5 ngày, quốc tế 7–15 ngày tùy hãng. Hàng đặt xưởng sản xuất theo yêu cầu cộng thêm thời gian xưởng làm, taomua báo rõ khi xác nhận đơn.', 'Mặc định taomua'),
+ ('cskh-quoc-te', 'RYN-SALES', 'HOI_DAP', 'Có giao hàng quốc tế không | Ship ra nước ngoài được không | Gửi hàng đi nước ngoài',
+  'Có ạ. taomua giao quốc tế; phí vận chuyển được báo qua email trước khi bạn thanh toán, giá hiện kèm USD tham khảo. Bạn chọn quốc gia khi đặt hàng.', 'Mặc định taomua'),
+ ('cskh-mua-le', 'RYN-SALES', 'HOI_DAP', 'Mua lẻ 1 cái được không | Mua thử mẫu | Lấy số lượng ít được không',
+  'Được ạ. Mua lẻ từ 1 cái ở 9mua.com (mục 9mua bán lẻ). Giá sỉ áp dụng từ 10 cái, mua càng nhiều giá càng thấp (bậc 10 / 50 / 100 / 500 cái).', 'Mặc định taomua'),
+ ('cskh-chiet-khau', 'RYN-SALES', 'HOI_DAP', 'Mua nhiều có được giảm giá không | Có chiết khấu không | Lấy số lượng lớn có bớt không',
+  'Có ạ: mua càng nhiều giá càng thấp. Mỗi sản phẩm có 4 bậc giá sỉ 10 / 50 / 100 / 500 cái, đã gồm VAT. Đơn lớn hơn 500 cái, bạn gửi yêu cầu báo giá để taomua đàm phán thêm với xưởng.', 'Mặc định taomua'),
+ ('cskh-in-logo', 'RYN-SALES', 'HOI_DAP', 'Có in logo không | Làm hàng theo mẫu riêng OEM | Đặt sản xuất theo yêu cầu',
+  'Có ạ. Bạn gửi yêu cầu báo giá ở mục Yêu cầu báo giá: tên hàng, số lượng, mẫu / logo. AI taomua tìm xưởng phù hợp theo giá và số lượng, CEO duyệt rồi báo giá cho bạn.', 'Mặc định taomua'),
+ ('cskh-an-toan', 'RYN-SALES', 'HOI_DAP', 'Chuyển khoản trước có an toàn không | Sợ bị lừa | Có uy tín không',
+  'An toàn ạ. taomua giữ tiền của bạn (Trade Assurance) đến khi bạn xác nhận đã nhận hàng đúng. Hàng lỗi, thiếu: đừng bấm đã nhận hàng, gửi khiếu nại để được hoàn tiền.', 'Mặc định taomua'),
+ ('cskh-doi-tra', 'RYN-SALES', 'HOI_DAP', 'Chính sách đổi trả hàng | Đổi trả hàng được không | Bảo hành thế nào',
+  'Hàng lỗi, sai mẫu, thiếu số lượng: bạn gửi khiếu nại kèm mã đơn và ảnh trong mục Báo lỗi, taomua phản hồi trong 2 giờ và đổi hàng hoặc hoàn tiền. Tiền vẫn được giữ đến khi xử lý xong.', 'Mặc định taomua'),
+ ('cskh-cod', 'RYN-SALES', 'HOI_DAP', 'Có thanh toán khi nhận hàng COD không | Nhận hàng rồi mới trả tiền | Ship COD',
+  'Đơn sỉ thanh toán chuyển khoản hoặc cổng thanh toán (9PAY, VNPay, Momo, Alipay); taomua giữ tiền đến khi bạn nhận hàng nên an toàn như nhận hàng rồi mới trả.', 'Mặc định taomua'),
+ ('cskh-dai-ly', 'RYN-SALES', 'HOI_DAP', 'Muốn làm đại lý | Làm cộng tác viên bán hàng | Hợp tác phân phối',
+  'Rất vui hợp tác ạ. Bạn để lại tên, số điện thoại và khu vực ở mục Báo lỗi / liên hệ, nhân viên taomua gọi lại tư vấn giá đại lý (bậc 100 / 500 cái).', 'Mặc định taomua'),
+ ('cskh-r-xung-ho', 'RYN-SALES', 'QUY_TAC', NULL, 'Luôn lịch sự, xưng "taomua", gọi khách là "bạn", trả lời bằng ngôn ngữ của khách.', 'Mặc định taomua'),
+ ('cskh-r-gia', 'RYN-SALES', 'QUY_TAC', NULL, 'Không hứa giảm giá ngoài bảng 4 bậc; không nói giá vốn, phí, biên lợi nhuận cho khách.', 'Mặc định taomua'),
+ ('cskh-r-bao-mat', 'RYN-SALES', 'QUY_TAC', NULL, 'Không bao giờ hỏi mật khẩu, mã OTP hay số thẻ của khách.', 'Mặc định taomua'),
+ ('all-r-24-7-trend', 'RYN-TREND', 'QUY_TAC', NULL, 'Làm việc 24/7. Hàng mới phải bán thử 50–100 cái trước khi nhập lớn; trend ngoài chỉ mở tối đa 3 yêu cầu tìm xưởng mỗi ngày.', 'Mặc định taomua'),
+ ('all-r-24-7-supply', 'RYN-SUPPLY', 'QUY_TAC', NULL, 'Làm việc 24/7. Ưu tiên xưởng TrustScore cao, có chứng nhận, tỉ lệ lỗi thấp; luôn đề xuất kèm 3 xưởng dự phòng; CEO quyết định chọn xưởng.', 'Mặc định taomua'),
+ ('all-r-24-7-nego', 'RYN-NEGO', 'QUY_TAC', NULL, 'Làm việc 24/7. Mục tiêu giảm 10% khi đàm phán, lịch sự, không ép xưởng dưới giá vốn; khách mua 500 cái thì đàm phán lại.', 'Mặc định taomua'),
+ ('all-r-24-7-price', 'RYN-PRICE', 'QUY_TAC', NULL, 'Làm việc 24/7. Giữ biên ròng sau thuế phí từ 15%; đối thủ rẻ hơn thì giảm tối đa 2% mỗi lần; biên trên 150% thì cảnh báo CEO.', 'Mặc định taomua'),
+ ('all-r-24-7-trace', 'RYN-TRACE', 'QUY_TAC', NULL, 'Làm việc 24/7. QC phải đạt từ 98%; xưởng tăng giá từ 10% thì báo ngay; đơn từ 10 triệu phải có hóa đơn.', 'Mặc định taomua'),
+ ('all-r-24-7-sales', 'RYN-SALES', 'QUY_TAC', NULL, 'Làm việc 24/7: trả lời khách ngay mọi lúc kể cả ban đêm, thứ 7, chủ nhật; việc cần người thì chuyển nhân viên kèm tóm tắt.', 'Mặc định taomua'),
+ ('all-r-24-7-logi', 'RYN-LOGI', 'QUY_TAC', NULL, 'Làm việc 24/7. Chọn hãng vận chuyển rẻ nhất đạt thời gian; đơn quốc tế báo phí cho khách trước khi thu tiền; biên an toàn vốn dưới 20% thì khóa nhập mới.', 'Mặc định taomua'),
+ ('price-qa-tinh-gia', 'RYN-PRICE', 'HOI_DAP', 'Giá bán được tính thế nào',
+  'Giá bán = (giá xưởng + phí) cộng biên theo bậc 10 / 50 / 100 / 500 cái, đã gồm VAT 8%. Biên ròng tính sau VAT 8%, phí ngân hàng 1% và thuế TNDN 20%, tối thiểu 15%.', 'Mặc định taomua'),
+ ('logi-qa-ship', 'RYN-LOGI', 'HOI_DAP', 'Chọn hãng vận chuyển thế nào',
+  'Theo khối lượng và vùng giao (nội thành, nội tỉnh, liên tỉnh, quốc tế), so bảng giá các hãng và chọn hãng rẻ nhất đạt thời gian; có API hãng thì lấy giá thật.', 'Mặc định taomua'),
+ ('supply-qa-chon-xuong', 'RYN-SUPPLY', 'HOI_DAP', 'Chọn xưởng sản xuất theo tiêu chí nào',
+  'Theo ngành hàng, giá theo số lượng và MOQ, biên còn lại, TrustScore, tỉ lệ lỗi, thời gian giao. AI đề xuất xưởng chính + 3 dự phòng, CEO chọn trên trang Tìm xưởng.', 'Mặc định taomua')
+ON CONFLICT (seed_key) DO NOTHING;
