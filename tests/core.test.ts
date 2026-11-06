@@ -234,3 +234,31 @@ describe('AI tìm xưởng (so khớp ngành, giá, số lượng)', async () =>
     expect(phoneKey('12345')).toBeNull();
   });
 });
+
+describe('AI phân loại khiếu nại', async () => {
+  const { classifyIssue } = await import('@/lib/complaints');
+  it('hàng lỗi: đổi hàng, mức vừa', () => {
+    const c = classifyIssue({ kind: 'KHIEU_NAI', message: 'Hàng bị hỏng 5 cái, không dùng được' });
+    expect(c.resolution).toBe('DOI_HANG');
+    expect(c.severity).toBe('VUA');
+    expect(c.status).toBe('MOI');
+  });
+  it('"không" không bị hiểu là "hỏng"; "trên" không bị hiểu là "trễ"', () => {
+    const c = classifyIssue({ kind: 'KHIEU_NAI', message: 'Tôi không thấy mã vận đơn trên trang' });
+    expect(c.resolution).toBe('XIN_LOI');
+    expect(c.reason).not.toMatch(/hàng lỗi|giao chậm/);
+  });
+  it('hoàn tiền đơn trên 10 triệu: mức cao, chuyển thẳng Chờ CEO', () => {
+    const c = classifyIssue({ kind: 'KHIEU_NAI', message: 'Yêu cầu hoàn tiền ngay', orderAmount: 15_000_000 });
+    expect(c.resolution).toBe('HOAN_TIEN');
+    expect(c.severity).toBe('CAO');
+    expect(c.status).toBe('CHO_CEO');
+    expect(classifyIssue({ kind: 'KHIEU_NAI', message: 'Yêu cầu hoàn tiền', orderAmount: 2_000_000 }).status).toBe('MOI');
+  });
+  it('nguy cơ khủng hoảng hoặc mất tiền: mức cao', () => {
+    expect(classifyIssue({ kind: 'KHIEU_NAI', message: 'Shop lừa đảo, tôi sẽ báo công an' }).severity).toBe('CAO');
+    expect(classifyIssue({ kind: 'LOI', message: 'Bị trừ tiền 2 lần khi chuyển khoản' }).severity).toBe('CAO');
+    expect(classifyIssue({ kind: 'LOI', message: 'Nút thanh toán không bấm được' }).severity).toBe('VUA');
+    expect(classifyIssue({ kind: 'LOI', message: 'Ảnh sản phẩm bị mờ' }).severity).toBe('THAP');
+  });
+});

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getProduct, priceComparisons } from '@/lib/catalog';
 import AddToCart from '@/components/AddToCart';
+import TraceQr from '@/components/TraceQr';
 import { Trust } from '@/components/ProductCard';
 import { vnd, dt } from '@/lib/format';
 
@@ -38,6 +39,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
           <h2>Xưởng sản xuất</h2>
           <div><strong>{p.supplier_name}</strong> · {p.supplier_country} · {p.supplier_years} năm hoạt động</div>
           <Trust score={p.trust_score} verified={p.verified_cert} />
+          <TraceQr sku={p.sku} />
           <p className="muted small">TrustScore tính từ tốc độ phản hồi, chứng nhận, tỷ lệ lỗi, tỷ lệ giao đúng hạn và đồng bộ tồn kho. Mỗi sản phẩm có xưởng dự phòng nếu xưởng chính gặp sự cố.</p>
         </section>
         <section className="card stack">

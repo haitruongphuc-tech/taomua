@@ -50,6 +50,7 @@ export async function applyAction(c: PoolClient, a: ActionRow): Promise<string> 
       return 'Đã lưu tên 7 ngôn ngữ.';
     case 'SOURCING_CHOICE':
       return chooseOfferTx(c, d.request_id, d.offer_id, null);
+    case 'EXTERNAL': // việc n8n gửi vào QAC: chỉ ghi nhận quyết định, n8n hỏi lại trạng thái để chạy tiếp
     case 'NOTE':
       return 'Đã ghi nhận.';
     default:

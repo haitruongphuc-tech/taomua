@@ -7,21 +7,6 @@ import { dt } from '@/lib/format';
 import { isUuid } from '@/lib/catalog';
 import Flash from '@/components/Flash';
 
-const ST: Record<string, [string, string]> = { MOI: ['Mới', 'bad'], DANG_XU_LY: ['Đang xử lý', 'warn'], DA_SUA: ['Đã sửa', 'ok'], KHONG_PHAI_LOI: ['Không phải lỗi', ''] };
-
-async function setReport(fd: FormData) {
-  'use server';
-  const u = await requireUser('orders.view');
-  await runAction('/quan-tri/loi', async () => {
-    const id = String(fd.get('id'));
-    const status = String(fd.get('status'));
-    if (!isUuid(id) || !ST[status]) throw new UserError('Dữ liệu không hợp lệ.');
-    await q('UPDATE issue_reports SET status=$2, note=$3, updated_at=now() WHERE id=$1', [id, status, String(fd.get('note') ?? '').slice(0, 1000)]);
-    await audit(actorOf(u), 'issue.update', 'issue_report', id, { status });
-    return 'Đã cập nhật.';
-  });
-}
-
 async function resolveError(fd: FormData) {
   'use server';
   const u = await requireUser('audit.view');
@@ -52,24 +37,11 @@ export default async function Problems({ searchParams }: { searchParams: { ok?: 
         <div className="card"><div className="muted small">Đơn thật (không có hàng giả lập)</div><div style={{ fontSize: '1.6rem' }}><b>{p.that}</b> / 100</div></div>
         <div className="card"><div className="muted small">Đơn thật đã thanh toán</div><div style={{ fontSize: '1.6rem' }}><b>{p.da_tra}</b></div></div>
         <div className="card"><div className="muted small">Đơn thật quốc tế</div><div style={{ fontSize: '1.6rem' }}><b>{p.quoc_te}</b></div></div>
-        <div className="card"><div className="muted small">Báo lỗi chưa xử lý</div><div style={{ fontSize: '1.6rem' }}><b>{reports.filter((r) => r.status === 'MOI' || r.status === 'DANG_XU_LY').length}</b></div></div>
+        <div className="card"><div className="muted small">Báo lỗi chưa xử lý</div><div style={{ fontSize: '1.6rem' }}><b>{reports.filter((r) => !['DA_SUA', 'KHONG_PHAI_LOI'].includes(r.status)).length}</b></div></div>
       </div>
       <p className="muted small">Khách báo lỗi ở <Link href="/bao-loi">/bao-loi</Link> (có link ở chân trang). Lỗi máy chủ tự ghi vào đây. Mục tiêu chạy thật: 10–100 đơn có thanh toán, trong nước và quốc tế.</p>
 
-      <h2>Khách báo lỗi ({reports.length})</h2>
-      <div className="table-wrap"><table className="small">
-        <thead><tr><th>Lúc</th><th>Liên hệ</th><th>Đơn</th><th>Trang</th><th>Nội dung</th><th>Xử lý</th></tr></thead>
-        <tbody>{reports.map((r) => (
-          <tr key={r.id}>
-            <td>{dt(r.created_at)}</td><td>{r.contact}</td><td className="mono">{r.order_code ?? '—'}</td><td>{r.page ?? '—'}</td>
-            <td style={{ whiteSpace: 'pre-wrap', maxWidth: 360 }}>{r.message}</td>
-            <td><form action={setReport} className="stack"><input type="hidden" name="id" value={r.id} />
-              <select name="status" defaultValue={r.status}>{Object.entries(ST).map(([k, v]) => <option key={k} value={k}>{v[0]}</option>)}</select>
-              <input name="note" defaultValue={r.note} placeholder="Ghi chú xử lý" />
-              <button className="btn sm secondary">Lưu</button></form></td>
-          </tr>
-        ))}</tbody>
-      </table></div>
+      <div className="card">Báo lỗi và khiếu nại của khách được AI phân loại và xử lý trên bảng Kanban: <Link href="/quan-tri/khieu-nai">Khủng hoảng & khiếu nại</Link>.</div>
 
       {can(u, 'audit.view') && (<>
         <h2>Lỗi hệ thống ({errors.filter((e) => !e.resolved).length} chưa xử lý)</h2>

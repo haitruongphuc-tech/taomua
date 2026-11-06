@@ -73,6 +73,14 @@ Mức sàn: biên dưới 15% → tối thiểu Cấp 2; đơn lỗ → tối th
 
 Nút tổng tắt thì không gì tự làm, trừ phân tích dữ liệu. Không agent nào chuyển tiền. Đề xuất bị từ chối thì 7 ngày không nhắc lại; đề xuất cũ không áp dụng nếu dữ liệu đã bị người khác đổi.
 
+**Quick Approve Center (QAC, One-Tap)** — `/quan-tri/duyet-nhanh` (cũng mở được bằng `/admin/approval` theo spec): một hàng đợi cho đơn Cấp 2–5, khoản chi, đề xuất 7 agent và việc n8n gửi vào (`POST /api/v1/approval/queue`, n8n hỏi trạng thái bằng `GET ?id=`). Trang tự cập nhật 10 giây, bật popup trình duyệt, nút DUYỆT / TỪ CHỐI lớn cho điện thoại; duyệt qua `POST /api/v1/approval/approve` (chỉ người đăng nhập). Kênh phụ: Zalo OA, email, Telegram nếu có cấu hình.
+
+**Kế toán & thuế** (`/quan-tri/ke-toan`): theo tháng VAT đầu ra / đầu vào / phải nộp, TNDN 20% tạm tính, phí sàn, phí ngân hàng, chi vận hành; hóa đơn điện tử bắt buộc cho đơn từ 10 triệu (ghi số hóa đơn); tải sổ bán hàng CSV để nhập MISA / FAST.
+
+**Khủng hoảng & khiếu nại** (`/quan-tri/khieu-nai`, `lib/complaints.ts`): khách gửi ở `/bao-loi`; AI phân loại mức độ và cách xử lý (đổi hàng, hoàn tiền Trade Assurance, bồi thường, xin lỗi, sửa web). Hoàn tiền / bồi thường đơn trên 10 triệu, nguy cơ khủng hoảng, khách mất tiền → mức Cao, vào thẳng cột Chờ CEO. Kanban: Mới → Đang xử lý → Chờ CEO → Hoàn thành.
+
+**Truy xuất nguồn gốc** (`/truy-xuat/[sku]`, RYN-TRACE): QR trên trang sản phẩm và trang quản trị; quét ra 7 ngôn ngữ theo máy người quét (xưởng, quốc gia, TrustScore, QC, lỗi, đúng hạn, giá sỉ). Không hiện giá vốn, biên.
+
 **Giữ tiền**: tiền khách chuyển được giữ đến khi khách xác nhận đã nhận hàng, hoặc CEO xác nhận. CEO có thể hoàn tiền từ khoản đang giữ.
 
 **Kênh bán**: taomua.com là kênh riêng. Mọi nền tảng khác là một dòng trong `sales_channels` với phí sàn riêng. Chưa kênh nào có API: đơn được nhập tay hoặc bằng CSV, sản phẩm xuất CSV để đăng thủ công. Khi có API, viết một `ChannelConnector` trong `lib/channels.ts`.

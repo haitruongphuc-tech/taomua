@@ -129,3 +129,28 @@ describe('7 AI agent', () => {
     await expect(decideAgentAction(a.id, { id: ceo.id, role: 'CEO', label: 'CEO' }, 'approve')).rejects.toThrow(/khóa nhập/);
   });
 });
+
+describe('Quick Approve Center', () => {
+  it('gom đơn, khoản chi, đề xuất AI; duyệt 1 chạm theo quyền; n8n gửi việc vào và hỏi trạng thái', async () => {
+    const { loadQueue, qacDecide, qacCreateExternal, qacStatus } = await import('@/lib/qac');
+    const ceoU = { id: ceo.id, email: 'c@t', name: 'CEO', role: 'CEO' as const };
+    const leadU = { id: lead.id, email: 'l@t', name: 'Lead', role: 'TRUONG_NHOM' as const };
+    await q("DELETE FROM payment_controls");
+    await q("INSERT INTO payouts(category, amount, payee, reason, proposed_by) VALUES ('NAP_ADS', 30000000, 'TikTok Ads', 'Chạy quảng cáo', $1)", [lead.id]);
+    const ext = await qacCreateExternal({ product_name: 'Áo thun 3D', price: 50000, total_cost: 28000, quantity: 200 }, sys);
+    expect(ext.status).toBe('PENDING');
+    expect(ext.cap).toBe(2);
+    const small = await qacCreateExternal({ product_name: 'Thau', price: 24000, total_cost: 17000, quantity: 10 }, sys);
+    expect(small.status).toBe('APPROVED_BY_AI');
+    const qCeo = await loadQueue(ceoU);
+    const types = new Set(qCeo.map((i) => i.type));
+    expect(types.has('PAYOUT') && types.has('AI')).toBe(true);
+    const pay = qCeo.find((i) => i.type === 'PAYOUT')!;
+    expect(pay.needs_password).toBe(true);
+    expect((await loadQueue(leadU)).find((i) => i.type === 'PAYOUT')!.can_decide).toBe(false); // 30 triệu: chỉ CEO, và lead là người đề xuất
+    await expect(qacDecide(pay.approval_id, 'APPROVED', ceoU, { id: ceo.id, label: 'CEO' }, { password: 'sai' })).rejects.toThrow(/mật khẩu/);
+    await qacDecide(ext.approval_id, 'APPROVED', leadU, { id: lead.id, label: 'Lead' });
+    expect((await qacStatus(ext.approval_id))!.status).toBe('APPROVED');
+    await expect(qacDecide('ORDER:not-a-uuid', 'APPROVED', ceoU, { id: ceo.id, label: 'CEO' })).rejects.toThrow(/không hợp lệ/);
+  });
+});

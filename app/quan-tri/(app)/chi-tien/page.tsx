@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { requireUser, actorOf, can, verifyPassword } from '@/lib/auth';
+import { requireUser, actorOf, can } from '@/lib/auth';
+import { decidePayout } from '@/lib/payouts-db';
 import { q, tx } from '@/lib/db';
 import { audit } from '@/lib/audit';
 import { runAction, UserError } from '@/lib/action';
@@ -44,30 +45,15 @@ async function act(fd: FormData) {
       });
     }
     const id = String(fd.get('id'));
+    if (op === 'approve' || op === 'reject') {
+      if (!can(u, 'payout.approve')) throw new UserError('Bạn không có quyền duyệt chi.');
+      return decidePayout(id, { id: u.id, role: u.role, label: a.label }, op, String(fd.get('password') ?? ''));
+    }
     return tx(async (c) => {
       const p = (await c.query('SELECT * FROM payouts WHERE id=$1 FOR UPDATE', [id])).rows[0];
       if (!p) throw new UserError('Không tìm thấy khoản chi.');
       const amount = Number(p.amount);
       const ctl = await loadControls(c);
-      if (op === 'approve' || op === 'reject') {
-        if (!can(u, 'payout.approve')) throw new UserError('Bạn không có quyền duyệt chi.');
-        if (p.status !== 'DE_XUAT') throw new UserError('Khoản chi đã được xử lý.');
-        const err = payoutApproveError(u, { amount, proposed_by: p.proposed_by });
-        if (err) throw new UserError(err);
-        if (op === 'approve') {
-          const blocked = payoutBlock(p.category, ctl);
-          if (blocked) throw new UserError(blocked);
-          if (needsReauth(amount)) {
-            const row = (await c.query('SELECT password_hash FROM users WHERE id=$1', [u.id])).rows[0];
-            if (!row || !verifyPassword(String(fd.get('password') ?? ''), row.password_hash)) {
-              throw new UserError(`Khoản từ ${vnd(REAUTH_THRESHOLD)} cần nhập đúng mật khẩu của bạn để duyệt.`);
-            }
-          }
-        }
-        await c.query('UPDATE payouts SET status=$2, approved_by=$3, approved_at=now() WHERE id=$1', [id, op === 'approve' ? 'DA_DUYET' : 'TU_CHOI', u.id]);
-        await audit(a, `payout.${op}`, 'payout', id, { amount, level: payoutLevel(amount), reauth: op === 'approve' && needsReauth(amount) }, c);
-        return op === 'approve' ? 'Đã duyệt chi. Kế toán thực hiện chuyển khoản rồi ghi nhận.' : 'Đã từ chối.';
-      }
       if (op === 'paid') {
         if (!can(u, 'payout.pay')) throw new UserError('Chỉ kế toán hoặc CEO ghi nhận đã chi.');
         if (p.status !== 'DA_DUYET') throw new UserError('Chỉ ghi nhận khoản đã duyệt.');

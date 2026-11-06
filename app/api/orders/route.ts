@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createOrder, OrderError } from '@/lib/orders';
-import { notifyApproval } from '@/lib/telegram';
+import { notifyOrderPending } from '@/lib/notify';
 import { quoteCart } from '@/lib/quote';
 import { one } from '@/lib/db';
 import { phoneKey } from '@/lib/countries';
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       note: String(b.note ?? ''),
       items: quote.lines.map((l) => ({ productId: l.id, quantity: l.qty })),
     }, { id: null, label: `Khách ${phone}` });
-    if (o.approval_status === 'PENDING') await notifyApproval(o).catch(() => null);
+    if (o.approval_status === 'PENDING') await notifyOrderPending(o).catch(() => null);
     return NextResponse.json({ code: o.code, total: o.tong_dt, needsApproval: o.approval_status === 'PENDING' });
   } catch (e) {
     if (e instanceof OrderError) return NextResponse.json({ error: e.message }, { status: 400 });

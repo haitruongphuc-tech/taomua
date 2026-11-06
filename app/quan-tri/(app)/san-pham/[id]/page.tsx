@@ -8,6 +8,7 @@ import { audit } from '@/lib/audit';
 import { UserError, runAction } from '@/lib/action';
 import { vnd, dt } from '@/lib/format';
 import ProductForm from '../ProductForm';
+import TraceQr from '@/components/TraceQr';
 import Flash from '@/components/Flash';
 
 async function update(fd: FormData) {
@@ -64,6 +65,13 @@ export default async function EditProduct({ params, searchParams }: { params: { 
       <div className="row spread"><h1 style={{ margin: 0 }}>{p.image_emoji} {p.name}</h1>{p.published && <Link href={`/san-pham/${p.id}`} className="small">Xem trên cửa hàng →</Link>}</div>
       <Flash sp={searchParams} />
       {edit ? <ProductForm p={p} suppliers={suppliers} action={update} /> : <p className="muted">Bạn chỉ có quyền xem.</p>}
+      {p.published && (
+        <section className="card row" style={{ gap: 16, alignItems: 'center' }}>
+          <TraceQr sku={p.sku} size={120} />
+          <div className="small muted">QR truy xuất nguồn gốc (RYN-TRACE): in lên bao bì / tem sản phẩm. Khách quét ra trang 7 ngôn ngữ theo ngôn ngữ máy của họ:
+            xưởng, quốc gia, TrustScore, tỉ lệ QC, giá sỉ. Không hiện giá vốn và biên.</div>
+        </section>
+      )}
 
       <section className="card stack">
         <h2>Giá trên nền tảng khác (bảng so sánh cho khách)</h2>

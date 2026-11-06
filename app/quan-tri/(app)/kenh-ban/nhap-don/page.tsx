@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { requireUser, actorOf } from '@/lib/auth';
 import { q } from '@/lib/db';
 import { parseOrderCsv, importChannelOrders, type ChannelOrderRow } from '@/lib/channels';
-import { notifyApproval } from '@/lib/telegram';
+import { notifyOrderPending } from '@/lib/notify';
 import Flash from '@/components/Flash';
 
 async function doImport(fd: FormData) {
@@ -27,7 +27,7 @@ async function doImport(fd: FormData) {
     if (!rows[0].externalRef) errors.push('Cần mã đơn trên kênh.');
   }
   const res = rows.length && !(fd.get('mode') !== 'csv' && errors.length) ? await importChannelOrders(channel, rows, actorOf(u)) : { created: [], errors: [] };
-  for (const o of res.created) if (o.pending) await notifyApproval({ id: o.id, code: o.code, tong_dt: o.tong_dt, bien_rong_tren_chi_phi: o.bien, cap_duyet: o.level }).catch(() => null);
+  for (const o of res.created) if (o.pending) await notifyOrderPending({ id: o.id, code: o.code, tong_dt: o.tong_dt, bien_rong_tren_chi_phi: o.bien, cap_duyet: o.level }).catch(() => null);
   const all = [...errors, ...res.errors];
   const ok = res.created.length ? `Đã tạo ${res.created.length} đơn: ${res.created.map((o) => `${o.code} (Cấp ${o.level}${o.pending ? ', chờ duyệt' : ''})`).join(', ')}.` : '';
   const p = new URLSearchParams();

@@ -416,3 +416,22 @@ CREATE TABLE IF NOT EXISTS issue_reports (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ===== Kế toán thuế: hóa đơn điện tử (> 10 triệu bắt buộc theo spec) =====
+ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS invoice_no TEXT;
+ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS invoice_at TIMESTAMPTZ;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS tax_code TEXT;   -- MST khách sỉ để xuất hóa đơn
+
+-- ===== Khủng hoảng & khiếu nại (Kanban): Mới → Đang xử lý → Chờ CEO → Hoàn thành =====
+ALTER TABLE issue_reports ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'LOI';
+ALTER TABLE issue_reports ADD COLUMN IF NOT EXISTS severity TEXT NOT NULL DEFAULT 'VUA';
+ALTER TABLE issue_reports ADD COLUMN IF NOT EXISTS resolution TEXT;
+ALTER TABLE issue_reports ADD COLUMN IF NOT EXISTS ai_reason TEXT NOT NULL DEFAULT '';
+ALTER TABLE issue_reports DROP CONSTRAINT IF EXISTS issue_reports_status_check;
+ALTER TABLE issue_reports ADD CONSTRAINT issue_reports_status_check CHECK (status IN ('MOI','DANG_XU_LY','CHO_CEO','DA_SUA','KHONG_PHAI_LOI'));
+ALTER TABLE issue_reports DROP CONSTRAINT IF EXISTS issue_reports_kind_check;
+ALTER TABLE issue_reports ADD CONSTRAINT issue_reports_kind_check CHECK (kind IN ('LOI','KHIEU_NAI'));
+ALTER TABLE issue_reports DROP CONSTRAINT IF EXISTS issue_reports_severity_check;
+ALTER TABLE issue_reports ADD CONSTRAINT issue_reports_severity_check CHECK (severity IN ('THAP','VUA','CAO'));
+ALTER TABLE issue_reports DROP CONSTRAINT IF EXISTS issue_reports_resolution_check;
+ALTER TABLE issue_reports ADD CONSTRAINT issue_reports_resolution_check CHECK (resolution IS NULL OR resolution IN ('DOI_HANG','HOAN_TIEN','BOI_THUONG','XIN_LOI','SUA_WEB','KHONG'));
