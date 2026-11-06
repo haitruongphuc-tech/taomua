@@ -7,5 +7,5 @@ export const LEGAL = {
 /** Thông tin nhận tiền lấy từ biến môi trường; chưa cấu hình thì không hiển thị số tài khoản nào. */
 export function paymentInfo() {
   const { PAYMENT_BANK_NAME: bank, PAYMENT_ACCOUNT_NO: no, PAYMENT_ACCOUNT_NAME: name } = process.env;
-  return bank && no && name ? { bank, no, name } : null;
+  return bank && no && name ? { bank, no, name, swift: process.env.PAYMENT_SWIFT || null } : null;
 }

@@ -1,8 +1,12 @@
 import Link from 'next/link';
 import CartBadge from '@/components/CartBadge';
 import { LEGAL } from '@/lib/legal';
+import { one } from '@/lib/db';
 
-export default function ShopLayout({ children }: { children: React.ReactNode }) {
+export const dynamic = 'force-dynamic';
+
+export default async function ShopLayout({ children }: { children: React.ReactNode }) {
+  const sim = (await one<{ n: number }>('SELECT count(*)::int AS n FROM products WHERE published AND is_simulated'))?.n ?? 0;
   return (
     <>
       <header className="topbar">
@@ -27,7 +31,8 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
         <div className="wrap stack">
           <div><strong>{LEGAL.name}</strong> · MST {LEGAL.taxCode}</div>
           <div>Giá đã gồm VAT. Tiền của bạn được giữ đến khi bạn xác nhận đã nhận hàng.</div>
-          <div>Bản thử nghiệm: sản phẩm và xưởng đang là dữ liệu giả lập.</div>
+          {sim > 0 && <div>Bản thử nghiệm: {sim} sản phẩm đang là dữ liệu giả lập, chưa nhận đơn thật cho các sản phẩm này.</div>}
+          <div><Link href="/bao-loi">Báo lỗi / Report a problem</Link> · <Link href="/don-hang">Tra cứu đơn / Track order</Link></div>
         </div>
       </footer>
     </>

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { currentUser, can, actorOf, type Perm } from './auth';
 import { OrderError } from './orders';
 import type { Actor } from './audit';
+import { logError } from './errors';
 
 export const json = (data: unknown, status = 200) => NextResponse.json(data, { status });
 
@@ -27,7 +28,7 @@ export async function handle(fn: () => Promise<NextResponse>) {
     return await fn();
   } catch (e: any) {
     if (e instanceof OrderError || e?.userFacing) return json({ error: e.message }, 400);
-    console.error(e);
+    await logError('api/v1', e);
     return json({ error: 'Lỗi hệ thống' }, 500);
   }
 }

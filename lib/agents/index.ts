@@ -8,7 +8,9 @@ import { TIERS, tierFor, priceForTier, type Tier } from '../pricing';
 import { trustScore } from '../trust';
 import { loadControls } from '../controls';
 import type { Controls } from '../payouts';
-import { aiEnabled, translate7 } from '../ai';
+import { aiEnabled, translate7, classify } from '../ai';
+import { createSourcingRequest, evaluateRequest, guessCategory } from '../sourcing-db';
+import { fold } from '../sourcing';
 import { notifyText } from '../notify';
 import { audit, type Actor } from '../audit';
 import { applyAction } from './apply';
@@ -19,7 +21,7 @@ import {
 
 export const AGENTS = {
   'RYN-TREND': { name: 'Trend Hunter', job: 'Xếp hạng hàng hot từ điểm trend, doanh số 7 ngày và CTR bán thử. Chỉ đọc.' },
-  'RYN-SUPPLY': { name: 'Supplier Brain', job: 'Tính lại TrustScore, phát hiện xưởng chính không đạt (Trust < 85, lỗi > 2%), đề xuất xưởng dự phòng.' },
+  'RYN-SUPPLY': { name: 'Supplier Brain', job: 'Tính lại TrustScore; tìm xưởng cùng ngành hàng, so giá theo số lượng và MOQ, biên, Trust, lỗi, thời gian giao; đề xuất xưởng chính + 3 dự phòng để CEO chọn.' },
   'RYN-NEGO': { name: 'Negotiation', job: 'Soạn 4 kịch bản đàm phán tiếng Trung kèm bản dịch cho xưởng 1688, mục tiêu giảm 10%.' },
   'RYN-PRICE': { name: 'Pricing Brain', job: 'Giữ biên ròng ≥ 15%, giảm 2% khi đối thủ rẻ hơn, cảnh báo biên > 150%.' },
   'RYN-TRACE': { name: 'Traceability', job: 'Lưu lịch sử giá vốn, cảnh báo xưởng tăng giá ≥ 10%, kiểm QC < 98%.' },
@@ -30,7 +32,7 @@ export type AgentCode = keyof typeof AGENTS;
 
 export type Finding = {
   agent: AgentCode;
-  kind: 'PRICE_CHANGE' | 'SWITCH_SUPPLIER' | 'PRODUCT_STATUS' | 'CONTROL_SET' | 'RFQ_QUOTE' | 'SUPPLIER_TRUST' | 'TRANSLATE' | 'NOTE';
+  kind: 'PRICE_CHANGE' | 'SWITCH_SUPPLIER' | 'SOURCING_CHOICE' | 'PRODUCT_STATUS' | 'CONTROL_SET' | 'RFQ_QUOTE' | 'SUPPLIER_TRUST' | 'TRANSLATE' | 'NOTE';
   severity?: 'INFO' | 'WARN' | 'DANGER';
   title: string;
   detail?: Record<string, unknown>;
@@ -84,28 +86,46 @@ async function supply(): Promise<Finding[]> {
       out.push({ agent: 'RYN-SUPPLY', kind: 'SUPPLIER_TRUST', title: `TrustScore ${s.name}: ${s.trust_score} → ${t}`, safe: true,
         entity: 'supplier', entityId: s.id, dedupe: `trust:${s.id}:${t}`, detail: { supplier_id: s.id, from: s.trust_score, to: t } });
       s.trust_score = t;
+      await q("UPDATE suppliers SET trust_score=$2 WHERE id=$1", [s.id, t]); // cập nhật ngay để chấm điểm xưởng bên dưới dùng số mới
     }
   }
-  const prods = await q("SELECT id, sku, name, supplier_id, supplier_ids_backup FROM products WHERE status <> 'PAUSED'");
+  const prods = await q("SELECT id, sku, name, category, moq, price_taomua_100, supplier_id, supplier_ids_backup FROM products WHERE status <> 'PAUSED'");
   for (const p of prods) {
     const primary = p.supplier_id ? byId.get(p.supplier_id) : null;
-    const backups = (p.supplier_ids_backup as string[]).map((id) => byId.get(id)).filter(Boolean);
-    if (!primary) {
-      out.push({ agent: 'RYN-SUPPLY', kind: 'NOTE', severity: 'WARN', title: `${p.name}: chưa có xưởng chính`, entity: 'product', entityId: p.id, dedupe: `nosup:${p.id}` });
-      continue;
+    // Chỉ tính xưởng dự phòng cùng ngành hàng với sản phẩm.
+    const sameCat = (s: any) => (s.categories as string[]).some((c) => fold(c) === fold(p.category));
+    const backups = (p.supplier_ids_backup as string[]).map((id) => byId.get(id)).filter((s) => s && sameCat(s));
+    const reason = !primary ? 'chưa có xưởng chính' : !supplierOk(primary)
+      ? `xưởng ${primary.name} không đạt (Trust ${primary.trust_score}, lỗi ${(Number(primary.defect_rate) * 100).toFixed(1)}%)` : null;
+    if (reason) {
+      // AI tự mở yêu cầu tìm xưởng: chấm điểm mọi xưởng cùng ngành theo giá, số lượng, Trust, lỗi, thời gian giao.
+      await tx((c) => createSourcingRequest(c, { productId: p.id, text: p.name, category: p.category, quantity: Math.max(100, p.moq),
+        targetUnitPrice: null, reason: `${p.name}: ${reason}. Giá bán hiện ${Number(p.price_taomua_100).toLocaleString("vi-VN")} đ (bậc 100); RYN-PRICE chỉnh giá sau khi đổi xưởng.` }));
+    } else if (backups.length < 3) {
+      out.push({ agent: 'RYN-SUPPLY', kind: 'NOTE', title: `${p.name}: mới có ${backups.length}/3 xưởng dự phòng cùng ngành ${p.category}`,
+        entity: 'product', entityId: p.id, dedupe: `fewbackup:${p.id}:${backups.length}` });
     }
-    if (backups.length < 3) {
-      out.push({ agent: 'RYN-SUPPLY', kind: 'NOTE', title: `${p.name}: mới có ${backups.length}/3 xưởng dự phòng`, entity: 'product', entityId: p.id, dedupe: `fewbackup:${p.id}` });
-    }
-    const best = pickBackup(primary, backups);
-    if (best) {
-      out.push({ agent: 'RYN-SUPPLY', kind: 'SWITCH_SUPPLIER', severity: 'WARN', level: 2,
-        title: `${p.name}: đổi xưởng ${primary.name} (Trust ${primary.trust_score}, lỗi ${(primary.defect_rate * 100).toFixed(1)}%) → ${best.name} (Trust ${best.trust_score})`,
-        entity: 'product', entityId: p.id, dedupe: `switch:${p.id}:${best.id}`,
-        detail: { product_id: p.id, from_id: primary.id, to_id: best.id, from_name: primary.name, to_name: best.name } });
-    } else if (!supplierOk(primary)) {
-      out.push({ agent: 'RYN-SUPPLY', kind: 'NOTE', severity: 'DANGER', title: `${p.name}: xưởng ${primary.name} không đạt và không có xưởng dự phòng đạt chuẩn`,
-        entity: 'product', entityId: p.id, dedupe: `nogoodsup:${p.id}` });
+  }
+  // Chấm điểm mọi yêu cầu tìm xưởng đang mở (từ sản phẩm, từ RFQ, hoặc người tạo trên trang Tìm xưởng).
+  const open = await q("SELECT id FROM sourcing_requests WHERE status IN ('MO','DA_DE_XUAT','KHONG_TIM_THAY') ORDER BY created_at LIMIT 100");
+  for (const { id } of open) {
+    const ev = await tx((c) => evaluateRequest(c, id));
+    const r = ev.request;
+    const rec = ev.result.recommendation;
+    if (rec) {
+      const sim = ev.result.ranked.find((x) => x.offer_id === rec.offer_id)?.simulated;
+      out.push({ agent: 'RYN-SUPPLY', kind: 'SOURCING_CHOICE', severity: 'INFO', level: 3, entity: 'sourcing', entityId: id,
+        dedupe: `sourcing:${id}:${rec.offer_id}`,
+        title: `${r.code} ${r.product_text} × ${r.quantity}: AI đề xuất ${rec.supplier} — giá xưởng+phí ${fmt(rec.landed ?? 0)} đ`
+          + (r.product_id
+            ? ` (hiện ${fmt(Number(r.p_cost) + Number(r.p_fee))} đ); chọn thì đổi xưởng chính và giá vốn`
+            : `, báo khách ${fmt(rec.unit_price)} đ/cái, biên ${rec.margin}%`)
+          + `${rec.test_qty ? `, bán thử ${rec.test_qty} cái trước (MOQ cao)` : ''}${sim ? ' (báo giá giả lập)' : ''}`,
+        detail: { request_id: id, offer_id: rec.offer_id, code: r.code, reason: r.reason, recommendation: rec, ranked: ev.result.ranked.slice(0, 5) } });
+    } else {
+      out.push({ agent: 'RYN-SUPPLY', kind: 'NOTE', severity: 'WARN', entity: 'sourcing', entityId: id, dedupe: `sourcing-none:${id}`,
+        title: `${r.code} ${r.product_text} × ${r.quantity}: chưa có xưởng đạt chuẩn. Gửi tin hỏi giá cho xưởng cùng ngành rồi nhập báo giá.`,
+        detail: { inquiry: ev.result.inquiry, ranked: ev.result.ranked.slice(0, 5) } });
     }
   }
   return out;
@@ -193,9 +213,27 @@ async function sales(): Promise<Finding[]> {
   for (const r of rfqs) {
     const p = matchProduct(r.product_text, prods);
     const tier = tierFor(r.quantity);
-    if (!p || !tier || r.quantity < Math.max(10, p.moq)) {
+    if (!p) {
+      // Hàng chưa có trong danh mục: AI mở yêu cầu tìm xưởng; RYN-SUPPLY chấm điểm xưởng và đề xuất CEO chọn.
+      let category = await guessCategory(r.product_text);
+      if (!category && aiEnabled()) {
+        const cats = (await q('SELECT DISTINCT unnest(categories) AS c FROM suppliers')).map((x) => x.c);
+        category = await classify(r.product_text, cats).catch(() => null);
+      }
+      const created = await tx(async (c) => {
+        const s = await createSourcingRequest(c, { rfqId: r.id, text: r.product_text, category, quantity: r.quantity,
+          targetUnitPrice: r.target_price ? Number(r.target_price) : null, reason: `Yêu cầu báo giá ${r.code} của ${r.contact_name}` });
+        await c.query("UPDATE rfqs SET status='DANG_TIM_XUONG' WHERE id=$1 AND status='MOI'", [r.id]);
+        return s;
+      });
+      out.push({ agent: 'RYN-SALES', kind: 'NOTE', entity: 'rfq', entityId: r.id, dedupe: `rfq-sourcing:${r.id}`,
+        title: `Báo giá ${r.code}: "${r.product_text}" chưa có trong danh mục. AI đã mở yêu cầu tìm xưởng${category ? ` ngành ${category}` : ' (chưa rõ ngành)'}.`,
+        detail: { sourcing_request_id: created.id } });
+      continue;
+    }
+    if (!tier || r.quantity < Math.max(10, p.moq)) {
       out.push({ agent: 'RYN-SALES', kind: 'NOTE', severity: 'INFO', entity: 'rfq', entityId: r.id, dedupe: `rfq-manual:${r.id}`,
-        title: `Báo giá ${r.code} cần người làm: ${!p ? 'không khớp sản phẩm có sẵn (cần tìm xưởng)' : 'dưới số lượng tối thiểu'}` });
+        title: `Báo giá ${r.code} cần người làm: dưới số lượng tối thiểu ${Math.max(10, p.moq)}` });
       continue;
     }
     const unit = priceForTier(p, tier);
@@ -262,6 +300,8 @@ async function logi(ctx: Ctx): Promise<Finding[]> {
   return out;
 }
 
+// SALES chạy trước SUPPLY để yêu cầu tìm xưởng mới từ RFQ được chấm điểm ngay trong cùng lần chạy.
+const RUN_ORDER: AgentCode[] = ['RYN-TREND', 'RYN-TRACE', 'RYN-SALES', 'RYN-SUPPLY', 'RYN-NEGO', 'RYN-PRICE', 'RYN-LOGI'];
 const RUNNERS: Record<AgentCode, (ctx: Ctx) => Promise<Finding[]>> = {
   'RYN-TREND': trend, 'RYN-SUPPLY': supply, 'RYN-NEGO': nego, 'RYN-PRICE': price, 'RYN-TRACE': trace, 'RYN-SALES': sales, 'RYN-LOGI': logi,
 };
@@ -297,7 +337,7 @@ export async function runAgents(trigger: 'TAY' | 'LICH' | 'API', actor: Actor, o
   const ctx: Ctx = { ctl, now: new Date() };
   const summary: Record<string, { moi: number; tu_dong: number; de_xuat: number; loi?: string }> = {};
   const alerts: string[] = [];
-  for (const code of (only ?? (Object.keys(AGENTS) as AgentCode[]))) {
+  for (const code of (only ?? RUN_ORDER)) {
     const s = (summary[code] = { moi: 0, tu_dong: 0, de_xuat: 0 } as any);
     try {
       const findings = await RUNNERS[code](ctx);

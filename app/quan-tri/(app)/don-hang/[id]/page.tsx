@@ -2,7 +2,8 @@ import { notFound } from 'next/navigation';
 import { requireUser, actorOf, can } from '@/lib/auth';
 import { q, one } from '@/lib/db';
 import { isUuid } from '@/lib/catalog';
-import { markPaid, shipOrder, markDelivered, releaseEscrow, refundOrder, cancelOrder } from '@/lib/orders';
+import { markPaid, shipOrder, markDelivered, releaseEscrow, refundOrder, cancelOrder, setShipFee } from '@/lib/orders';
+import { countryName } from '@/lib/countries';
 import { vnd, pct, dt, label } from '@/lib/format';
 import { runAction } from '@/lib/action';
 import Flash from '@/components/Flash';
@@ -12,7 +13,7 @@ async function act(fd: FormData) {
   const id = String(fd.get('id'));
   const op = String(fd.get('op'));
   const back = `/quan-tri/don-hang/${id}`;
-  const perm = ({ paid: 'orders.payment', ship: 'orders.fulfil', delivered: 'orders.fulfil', release: 'escrow.release', refund: 'escrow.release', cancel: 'orders.fulfil' } as const)[op as 'paid'];
+  const perm = ({ paid: 'orders.payment', ship: 'orders.fulfil', delivered: 'orders.fulfil', release: 'escrow.release', refund: 'escrow.release', cancel: 'orders.fulfil', shipfee: 'orders.fulfil' } as const)[op as 'paid'];
   if (!perm) return;
   const u = await requireUser();
   await runAction(back, async () => {
@@ -25,6 +26,7 @@ async function act(fd: FormData) {
       case 'release': await releaseEscrow(id, { kind: 'CEO', actor: a }); return 'Đã giải ngân tiền đang giữ.';
       case 'refund': await refundOrder(id, a, String(fd.get('reason') ?? '')); return 'Đã ghi nhận hoàn tiền. Nhớ thực hiện chuyển khoản hoàn cho khách.';
       case 'cancel': await cancelOrder(id, a, String(fd.get('reason') ?? '')); return 'Đã hủy đơn.';
+      case 'shipfee': await setShipFee(id, Number(fd.get('ship_fee')), a); return 'Đã lưu phí vận chuyển. Gửi email báo khách tổng cần thanh toán.';
     }
   });
 }
@@ -48,12 +50,17 @@ export default async function OrderDetail({ params, searchParams }: { params: { 
       <div className="grid cols-2">
         <section className="card stack small">
           <h2>Khách và giao hàng</h2>
-          <div>{o.customer_name} · {o.phone}{o.email ? ` · ${o.email}` : ''}</div>
+          <div>{o.customer_name} · {o.phone}{(o.customer_email ?? o.email) ? ` · ${o.customer_email ?? o.email}` : ''}</div>
+          <div>Giao tới: <b>{countryName(o.ship_country)}</b>{o.ship_country !== 'VN' && <span className="badge orange" style={{ marginLeft: 6 }}>Quốc tế</span>}</div>
           <div>{o.ship_address}</div>
           {o.note && <div className="muted">Ghi chú: {o.note}</div>}
           <div>Kênh: <b>{o.channel_name}</b>{o.external_ref ? ` · mã kênh ${o.external_ref}` : ''}</div>
           <div>Giao: {label(o.wfs_status)}{o.carrier ? ` · ${o.carrier} ${o.tracking_no}` : ''}</div>
           <div>Tạo lúc {dt(o.created_at)}</div>
+          <div>Phí vận chuyển thu thêm: <b>{vnd(o.ship_fee)}</b> · Khách cần trả: <b>{vnd(Number(o.tong_dt) + Number(o.ship_fee))}</b></div>
+          {['CHO_DUYET', 'CHO_THANH_TOAN'].includes(o.status) && o.payment_status !== 'DA_NHAN' && can(u, 'orders.fulfil') && (
+            <form action={act} className="row"><H op="shipfee"><input name="ship_fee" type="number" min={0} defaultValue={Number(o.ship_fee)} style={{ width: 140 }} /><button className="btn sm secondary">Lưu phí vận chuyển</button></H></form>
+          )}
         </section>
         <section className="card stack small">
           <h2>Biên ròng sau thuế, phí</h2>
@@ -83,7 +90,7 @@ export default async function OrderDetail({ params, searchParams }: { params: { 
         <h2>Xử lý đơn</h2>
         {o.status === 'CHO_DUYET' && <p>Đơn đang chờ duyệt ở mục Chờ duyệt.</p>}
         {o.status === 'CHO_THANH_TOAN' && can(u, 'orders.payment') && (
-          <form action={act} className="row"><H op="paid"><span>Đã đối chiếu tiền {vnd(o.tong_dt)} vào tài khoản?</span><button className="btn">Ghi nhận đã nhận tiền</button></H></form>
+          <form action={act} className="row"><H op="paid"><span>Đã đối chiếu tiền {vnd(Number(o.tong_dt) + Number(o.ship_fee))} vào tài khoản?</span><button className="btn">Ghi nhận đã nhận tiền</button></H></form>
         )}
         {o.status === 'DANG_CHUAN_BI' && can(u, 'orders.fulfil') && (
           <form action={act} className="form-grid"><H op="ship">

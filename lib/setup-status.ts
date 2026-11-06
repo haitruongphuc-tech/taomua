@@ -23,8 +23,32 @@ export async function setupItems(): Promise<SetupItem[]> {
     n("SELECT count(*)::int n FROM products WHERE published AND NOT name_i18n ? 'zh'"),
   ]);
   const rateSet = Number(process.env.CNY_VND_RATE) > 0;
+  const [simLive, liveNoRealSupplier, supNoCat, unverifiedLive] = await Promise.all([
+    n('SELECT count(*)::int n FROM products WHERE published AND is_simulated'),
+    n('SELECT count(*)::int n FROM products p LEFT JOIN suppliers s ON s.id=p.supplier_id WHERE p.published AND NOT p.is_simulated AND (s.id IS NULL OR s.is_simulated)'),
+    n("SELECT count(*)::int n FROM suppliers WHERE categories = '{}'"),
+    n(`SELECT count(*)::int n FROM products p WHERE p.published AND NOT p.is_simulated
+       AND NOT EXISTS (SELECT 1 FROM supplier_offers o WHERE o.product_id=p.id AND o.supplier_id=p.supplier_id AND o.verified)`),
+  ]);
+  const https = (process.env.SITE_URL ?? '').startsWith('https://');
 
   return [
+    // --- Bắt buộc trước khi nhận đơn và tiền thật ---
+    { group: 'Trước khi bán thật', label: 'Không bán hàng giả lập', status: simLive ? 'THIEU' : 'OK', href: '/quan-tri/san-pham', where: 'Quản trị → Sản phẩm',
+      detail: simLive ? `${simLive} sản phẩm giả lập đang hiển thị bán. Sửa số thật (giá vốn, giá bán, xưởng) rồi bỏ ô "Dữ liệu giả lập", hoặc ẩn sản phẩm.` : 'Không còn sản phẩm giả lập đang bán.' },
+    { group: 'Trước khi bán thật', label: 'Xưởng thật cho hàng đang bán', status: liveNoRealSupplier ? 'THIEU' : 'OK', href: '/quan-tri/tim-xuong', where: 'Quản trị → Tìm xưởng (AI)',
+      detail: `${liveNoRealSupplier} sản phẩm thật đang bán chưa có xưởng thật. AI tìm xưởng, CEO chọn.` },
+    { group: 'Trước khi bán thật', label: 'Báo giá xưởng đã xác nhận', status: unverifiedLive ? 'THIEU' : 'OK', href: '/quan-tri/tim-xuong', where: 'Tìm xưởng → Báo giá xưởng',
+      detail: `${unverifiedLive} sản phẩm thật đang bán chưa có báo giá của xưởng chính được xác nhận lại.` },
+    { group: 'Trước khi bán thật', label: 'Ngành hàng của xưởng', status: supNoCat ? 'THIEU' : 'OK', href: '/quan-tri/xuong', where: 'Quản trị → Xưởng',
+      detail: `${supNoCat} xưởng chưa có ngành hàng: AI không xếp được vào đúng ngành.` },
+    { group: 'Trước khi bán thật', label: 'Máy chủ, tên miền, HTTPS', status: https ? 'OK' : 'THIEU', where: 'SITE_URL=https://taomua.com',
+      detail: https ? `Đang chạy ở ${process.env.SITE_URL}.` : 'Khách thật chỉ nên đặt và trả tiền qua https. Cần máy chủ, tên miền, chứng chỉ và sao lưu database hằng ngày.' },
+    { group: 'Trước khi bán thật', label: 'Nhận tiền quốc tế', status: env('PAYMENT_SWIFT', 'USD_VND_RATE') ? 'OK' : 'THIEU', where: 'PAYMENT_SWIFT, USD_VND_RATE',
+      detail: 'Mã SWIFT để khách nước ngoài chuyển khoản, tỷ giá USD để hiện số tiền tham khảo. Phí vận chuyển quốc tế nhập trên từng đơn.' },
+    { group: 'Trước khi bán thật', label: 'Kế toán xác nhận cách ghi phí vận chuyển quốc tế và thuế xuất khẩu', status: 'CHUA_LAM', where: 'Kế toán',
+      detail: 'Hiện phí vận chuyển thu thêm được cộng vào số tiền khách trả, không tính vào doanh thu hàng hóa và biên.' },
+
     // --- Khóa API và cấu hình (ghi vào file .env trên máy chủ, không gửi qua chat) ---
     { group: 'Cấu hình .env', label: 'AI ngôn ngữ (Qwen / OpenAI)', status: env('AI_API_KEY') ? 'OK' : 'THIEU', where: 'AI_API_KEY, AI_BASE_URL, AI_MODEL',
       detail: 'Dịch tên sản phẩm 7 ngôn ngữ, dịch tin nhắn xưởng. Chưa có thì 7 agent vẫn chạy bằng quy tắc, phần dịch tạm dừng.' },

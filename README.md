@@ -67,6 +67,10 @@ Mức sàn: biên dưới 15% → tối thiểu Cấp 2; đơn lỗ → tối th
 | RYN-SALES | Báo giá yêu cầu sỉ dưới 5 triệu; dừng hàng bán thử CTR < 2%; dịch tên 7 ngôn ngữ (khi có AI_API_KEY) | Báo giá lớn hơn (theo cấp); nhập lớn khi CTR > 3% (Cấp 3) |
 | RYN-LOGI | Cảnh báo đơn quá hạn duyệt, chờ thanh toán, chờ giải ngân, khoản chi chờ lâu | Khóa nhập mới khi biên an toàn < 20% (tự làm nếu số thật, đề xuất nếu số giả lập) |
 
+**AI tìm xưởng** (`lib/sourcing.ts`, trang `/quan-tri/tim-xuong`): mỗi nhu cầu (sản phẩm có xưởng không đạt, khách hỏi giá hàng chưa có, hoặc người tạo) được RYN-SUPPLY chấm điểm trên mọi xưởng cùng ngành hàng: báo giá đúng món đó, giá xưởng + phí, MOQ so với số lượng (MOQ cao → bán thử trước), biên ở giá bán dự kiến, TrustScore ≥ 85, lỗi ≤ 2%, ngày sản xuất, giao quốc tế. AI đề xuất 1 xưởng chính + 3 dự phòng, **CEO chọn** (Cấp 3). Chưa có báo giá đạt thì AI soạn tin hỏi giá tiếng Trung / Việt. AI không bịa xưởng: chỉ xếp hạng xưởng và báo giá có trong hệ thống; báo giá nhập tay hoặc dán tin nhắn xưởng để AI đọc (cần `AI_API_KEY`).
+
+**Bán thật trong nước và quốc tế**: khách chọn nơi giao (23 nước), số điện thoại quốc tế `+mã nước`, đơn quốc tế bắt buộc email và tối thiểu Cấp 2 để nhân viên nhập phí vận chuyển trước khi khách trả tiền; số tiền khách trả = tiền hàng + phí vận chuyển, đối soát sao kê khớp theo số này. Khách báo lỗi ở `/bao-loi`; lỗi máy chủ tự ghi vào `/quan-tri/loi` cùng bộ đếm đơn thật (mục tiêu 10–100 đơn). Danh sách việc phải xong trước khi nhận tiền thật ở *Thông tin cần nhập → Trước khi bán thật*.
+
 Nút tổng tắt thì không gì tự làm, trừ phân tích dữ liệu. Không agent nào chuyển tiền. Đề xuất bị từ chối thì 7 ngày không nhắc lại; đề xuất cũ không áp dụng nếu dữ liệu đã bị người khác đổi.
 
 **Giữ tiền**: tiền khách chuyển được giữ đến khi khách xác nhận đã nhận hàng, hoặc CEO xác nhận. CEO có thể hoàn tiền từ khoản đang giữ.

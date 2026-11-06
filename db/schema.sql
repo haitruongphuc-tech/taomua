@@ -339,3 +339,80 @@ CREATE TABLE IF NOT EXISTS product_cost_history (
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS cost_history_product ON product_cost_history(product_id, recorded_at DESC);
+
+-- ===== AI tìm xưởng (RYN-SUPPLY): xưởng theo ngành hàng, báo giá xưởng, yêu cầu tìm xưởng. AI đề xuất, CEO chọn. =====
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS categories TEXT[] NOT NULL DEFAULT '{}';      -- ngành hàng xưởng làm được
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS lead_time_days INT;                            -- thời gian sản xuất thường lệ
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS ships_international BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS supplier_offers (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  supplier_id    UUID NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+  product_id     UUID REFERENCES products(id) ON DELETE SET NULL,
+  product_text   TEXT NOT NULL,                       -- mô tả hàng xưởng báo giá
+  category       TEXT NOT NULL,
+  unit_cost      BIGINT NOT NULL CHECK (unit_cost > 0),  -- giá xưởng 1 cái, quy ra VND
+  currency       TEXT NOT NULL DEFAULT 'VND',
+  price_original NUMERIC(14,2),                       -- giá gốc theo tiền tệ xưởng
+  moq            INT NOT NULL DEFAULT 1 CHECK (moq >= 1),
+  lead_time_days INT,
+  source         TEXT NOT NULL DEFAULT 'NHAP_TAY' CHECK (source IN ('NHAP_TAY','AI_TRICH','CSV','API')),
+  source_url     TEXT,
+  raw_text       TEXT,
+  verified       BOOLEAN NOT NULL DEFAULT FALSE,      -- người đã xác nhận lại với xưởng
+  is_simulated   BOOLEAN NOT NULL DEFAULT FALSE,
+  valid_until    DATE,
+  created_by     UUID REFERENCES users(id),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS offers_category ON supplier_offers(category);
+
+CREATE SEQUENCE IF NOT EXISTS sourcing_code_seq START 101;
+CREATE TABLE IF NOT EXISTS sourcing_requests (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code              TEXT NOT NULL UNIQUE,
+  product_id        UUID REFERENCES products(id) ON DELETE SET NULL,
+  rfq_id            UUID REFERENCES rfqs(id) ON DELETE SET NULL,
+  product_text      TEXT NOT NULL,
+  category          TEXT,
+  quantity          INT NOT NULL CHECK (quantity > 0),
+  target_unit_price BIGINT,                          -- giá bán dự kiến / giá khách muốn, mỗi cái
+  ship_country      TEXT NOT NULL DEFAULT 'VN',
+  reason            TEXT NOT NULL DEFAULT '',
+  status            TEXT NOT NULL DEFAULT 'MO' CHECK (status IN ('MO','DA_DE_XUAT','DA_CHON','KHONG_TIM_THAY','DONG')),
+  result            JSONB NOT NULL DEFAULT '{}',
+  chosen_offer_id   UUID REFERENCES supplier_offers(id) ON DELETE SET NULL,
+  created_by        UUID REFERENCES users(id),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  decided_by        UUID REFERENCES users(id),
+  decided_at        TIMESTAMPTZ
+);
+-- Mỗi sản phẩm / RFQ chỉ một yêu cầu tìm xưởng đang mở.
+CREATE UNIQUE INDEX IF NOT EXISTS sourcing_open_product ON sourcing_requests(product_id) WHERE status IN ('MO','DA_DE_XUAT','KHONG_TIM_THAY');
+CREATE UNIQUE INDEX IF NOT EXISTS sourcing_open_rfq ON sourcing_requests(rfq_id) WHERE status IN ('MO','DA_DE_XUAT','KHONG_TIM_THAY');
+
+-- ===== Bán thật trong nước và quốc tế =====
+ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS ship_country TEXT NOT NULL DEFAULT 'VN';
+ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS ship_fee BIGINT NOT NULL DEFAULT 0 CHECK (ship_fee >= 0);  -- phí vận chuyển thu thêm (đơn quốc tế)
+ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS customer_email TEXT;
+
+-- Nhật ký lỗi hệ thống và báo lỗi của khách trong giai đoạn chạy thật.
+CREATE TABLE IF NOT EXISTS app_errors (
+  id       BIGSERIAL PRIMARY KEY,
+  at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  place    TEXT NOT NULL,
+  message  TEXT NOT NULL,
+  detail   JSONB NOT NULL DEFAULT '{}',
+  resolved BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE TABLE IF NOT EXISTS issue_reports (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_code TEXT,
+  contact    TEXT NOT NULL,
+  page       TEXT,
+  message    TEXT NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'MOI' CHECK (status IN ('MOI','DANG_XU_LY','DA_SUA','KHONG_PHAI_LOI')),
+  note       TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

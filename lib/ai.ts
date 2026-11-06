@@ -55,6 +55,38 @@ export async function translate7(text: string): Promise<Partial<Record<Lang, str
   }
 }
 
+/** Xếp mô tả hàng vào một ngành có sẵn. Trả null nếu chưa có AI hoặc AI không chọn được ngành trong danh sách. */
+export async function classify(text: string, options: string[]): Promise<string | null> {
+  if (!options.length) return null;
+  const out = await chat([
+    { role: 'system', content: `Chọn đúng một ngành hàng trong danh sách cho mô tả sản phẩm. Chỉ trả tên ngành, hoặc "KHONG" nếu không ngành nào phù hợp. Danh sách: ${options.join(' | ')}` },
+    { role: 'user', content: text.slice(0, 500) },
+  ]);
+  const pick = out?.trim().replace(/^"|"$/g, '');
+  return options.find((o) => o.toLowerCase() === pick?.toLowerCase()) ?? null;
+}
+
+/** AI đọc tin nhắn / trang báo giá của xưởng (Trung, Anh, Việt) và trích các trường. Chỉ trích những gì có trong văn bản. */
+export async function extractOffer(text: string): Promise<{ supplier_name?: string; product_text?: string; price?: number; currency?: string; moq?: number; lead_time_days?: number } | null> {
+  const out = await chat([
+    { role: 'system', content: 'Extract a factory price quote from the text. Reply JSON only: {"supplier_name":string|null,"product_text":string|null (in Vietnamese),"price":number|null (unit price),"currency":"CNY"|"USD"|"VND"|null,"moq":number|null,"lead_time_days":number|null}. Use null for anything not stated. Never guess numbers.' },
+    { role: 'user', content: text.slice(0, 6000) },
+  ], { json: true });
+  if (!out) return null;
+  try {
+    const j = JSON.parse(out.replace(/^```(json)?|```$/g, '').trim());
+    const num = (x: unknown) => (typeof x === 'number' && x > 0 ? x : undefined);
+    return {
+      supplier_name: typeof j.supplier_name === 'string' ? j.supplier_name.slice(0, 200) : undefined,
+      product_text: typeof j.product_text === 'string' ? j.product_text.slice(0, 300) : undefined,
+      price: num(j.price), currency: ['CNY', 'USD', 'VND'].includes(j.currency) ? j.currency : undefined,
+      moq: num(j.moq) ? Math.round(j.moq) : undefined, lead_time_days: num(j.lead_time_days) ? Math.round(j.lead_time_days) : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Dịch một đoạn (ví dụ tin nhắn xưởng tiếng Trung) sang tiếng Việt. */
 export async function translateToVi(text: string): Promise<string | null> {
   return chat([

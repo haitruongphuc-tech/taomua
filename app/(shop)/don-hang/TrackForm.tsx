@@ -43,10 +43,12 @@ export default function TrackForm({ initialCode }: { initialCode: string }) {
               ))}</tbody>
             </table>
           </div>
-          <div className="row spread"><strong>Tổng tiền</strong><strong className="mono">{fmt(o.tong_dt)}</strong></div>
+          <div className="row spread"><span>Tiền hàng (đã gồm VAT) / Goods</span><span className="mono">{fmt(o.tong_dt)}</span></div>
+          {(Number(o.ship_fee) > 0 || o.ship_country !== 'VN') && <div className="row spread"><span>Phí vận chuyển / Shipping{o.ship_country !== 'VN' ? ` (${o.ship_country})` : ''}</span><span className="mono">{Number(o.ship_fee) > 0 ? fmt(o.ship_fee) : 'đang báo giá / pending'}</span></div>}
+          <div className="row spread"><strong>Cần thanh toán / Total due</strong><strong className="mono">{fmt(o.amount_due)}{st.usd ? ` ≈ ${st.usd}` : ''}</strong></div>
           <div>Thanh toán: <span className="badge">{LABEL[o.trade_assurance_status] ?? o.trade_assurance_status}</span></div>
           {o.status === 'CHO_THANH_TOAN' && (st.payment
-            ? <div className="alert info">Chuyển khoản {fmt(o.tong_dt)} tới {st.payment.bank} · STK <b className="mono">{st.payment.no}</b> · {st.payment.name}. Nội dung: <b className="mono">{o.code}</b>.</div>
+            ? <div className="alert info">Chuyển khoản / Bank transfer <b>{fmt(o.amount_due)}</b> tới {st.payment.bank} · STK <b className="mono">{st.payment.no}</b> · {st.payment.name}{st.payment.swift ? <> · SWIFT <b className="mono">{st.payment.swift}</b></> : null}. Nội dung / Reference: <b className="mono">{o.code}</b>. Chuyển đúng số tiền để hệ thống tự khớp. / Send the exact amount.</div>
             : <div className="alert warn">taomua sẽ liên hệ để gửi thông tin thanh toán.</div>)}
           {o.carrier && <div>Vận chuyển: {o.carrier} · mã vận đơn <span className="mono">{o.tracking_no}</span></div>}
           {o.trade_assurance_status === 'HOLD' && ['DANG_GIAO', 'DA_GIAO'].includes(o.status) && (

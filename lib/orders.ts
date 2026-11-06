@@ -4,6 +4,7 @@ import { audit, type Actor } from './audit';
 import { calcMargin, tierFor, priceForTier, type Tier } from './pricing';
 import { approvalLevel, canApprove, deadlineFor, LEVELS, type Level } from './approval';
 import { loadControls } from './controls';
+import { phoneKey, isCountry } from './countries';
 
 export class OrderError extends Error {}
 
@@ -13,15 +14,16 @@ export type NewOrder = {
   address: string;
   note?: string;
   externalRef?: string | null;
+  country?: string;               // ISO 2 chữ; mặc định VN. Khác VN là đơn quốc tế.
   items: { productId: string; quantity: number; unitPrice?: number }[];
 };
 
 const SYSTEM: Actor = { id: null, label: 'Hệ thống' };
 
 export function normalizePhone(p: string) {
-  const d = p.replace(/[^\d+]/g, '');
-  if (!/^(\+?84|0)\d{8,10}$/.test(d)) throw new OrderError('Số điện thoại không hợp lệ.');
-  return d.replace(/^\+?84/, '0');
+  const k = phoneKey(p);
+  if (!k) throw new OrderError('Số điện thoại không hợp lệ. Số nước ngoài ghi kèm mã nước, ví dụ +1 415 555 0100. / Invalid phone: include the country code.');
+  return k;
 }
 
 /** Tạo đơn từ bất kỳ kênh nào. Kênh taomua.com dùng giá 4 bậc; kênh khác dùng giá niêm yết trên kênh
@@ -34,6 +36,12 @@ export async function createOrder(input: NewOrder, actor: Actor = SYSTEM) {
   if (name.length < 2 || name.length > 120) throw new OrderError('Tên khách không hợp lệ.');
   if (address.length < 5 || address.length > 500) throw new OrderError('Địa chỉ giao hàng không hợp lệ.');
   const phone = normalizePhone(input.customer.phone);
+  const country = (input.country || 'VN').toUpperCase();
+  if (!isCountry(country)) throw new OrderError('Quốc gia giao hàng chưa hỗ trợ. / Destination not supported yet.');
+  const intl = country !== 'VN';
+  const email = input.customer.email?.trim() || null;
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new OrderError('Email không hợp lệ. / Invalid email.');
+  if (intl && !email) throw new OrderError('Đơn quốc tế cần email để gửi báo giá vận chuyển. / Email is required for international orders.');
 
   return tx(async (c) => {
     const ch = (await c.query('SELECT * FROM sales_channels WHERE code=$1 AND active', [input.channelCode])).rows[0];
@@ -71,7 +79,10 @@ export async function createOrder(input: NewOrder, actor: Actor = SYSTEM) {
     if (existing?.kind === 'AI_AGENT' && existing.agent_limit && m.revenue > Number(existing.agent_limit)) {
       throw new OrderError(`Đơn vượt hạn mức ${Number(existing.agent_limit).toLocaleString('vi-VN')} đ của AI agent.`);
     }
-    const { level, reason } = approvalLevel(m.revenue, m.marginOnCost, m.net);
+    const base = approvalLevel(m.revenue, m.marginOnCost, m.net);
+    // Đơn quốc tế: phí vận chuyển và thủ tục xuất khẩu cần người báo trước khi khách thanh toán → tối thiểu Cấp 2.
+    const level = (intl && base.level < 2 ? 2 : base.level) as Level;
+    const reason = intl && base.level < 2 ? `Đơn quốc tế (${country}): cần báo phí vận chuyển trước khi thanh toán.` : base.reason;
     const auto = level === 1 && (await loadControls(c)).AI_AUTO;
 
     const cust = (await c.query(
@@ -85,14 +96,14 @@ export async function createOrder(input: NewOrder, actor: Actor = SYSTEM) {
       `INSERT INTO wholesale_orders(code, channel_id, external_ref, customer_id, ship_address, note, status,
          tong_dt, tong_chi_phi_truoc_thue, vat_dau_vao, phi_kenh, vat_8, phi_mb_1, ln_truoc_tndn, thue_tndn_20, ln_rong_sau_thue,
          bien_rong_tren_chi_phi, bien_rong_tren_dt, cap_duyet, cap_ly_do, approval_status, approval_deadline,
-         approved_by_label, approved_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING *`,
+         approved_by_label, approved_at, ship_country, customer_email)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING *`,
       [code, ch.id, input.externalRef || null, cust.id, address, (input.note ?? '').slice(0, 1000),
         auto ? 'CHO_THANH_TOAN' : 'CHO_DUYET',
         m.revenue, m.cost, m.inputVat, m.channelFee, m.vatOut, m.bankFee, m.preTax, m.cit, m.net,
         m.marginOnCost, m.marginOnRevenue, level, reason,
         auto ? 'APPROVED' : 'PENDING', auto ? null : deadlineFor(level),
-        auto ? 'Tự động (Cấp 1)' : null, auto ? new Date() : null])).rows[0];
+        auto ? 'Tự động (Cấp 1)' : null, auto ? new Date() : null, country, email])).rows[0];
 
     for (const l of lines) {
       await c.query(
@@ -145,7 +156,7 @@ export async function markPaid(orderId: string, actor: Actor, c0?: PoolClient) {
     if (!['CHO_THANH_TOAN'].includes(o.status)) throw new OrderError('Trạng thái đơn không cho phép ghi nhận tiền.');
     await c.query(`UPDATE wholesale_orders SET payment_status='DA_NHAN', paid_at=now(), trade_assurance_status='HOLD',
       status='DANG_CHUAN_BI', updated_at=now() WHERE id=$1`, [orderId]);
-    await audit(actor, 'order.paid', 'order', orderId, { code: o.code, amount: o.tong_dt }, c);
+    await audit(actor, 'order.paid', 'order', orderId, { code: o.code, amount: Number(o.tong_dt) + Number(o.ship_fee) }, c);
   };
   return c0 ? run(c0) : tx(run);
 }
@@ -215,11 +226,23 @@ export async function cancelOrder(orderId: string, actor: Actor, reason: string)
   });
 }
 
+/** Phí vận chuyển thu thêm (đơn quốc tế). Chỉ sửa trước khi nhận tiền. */
+export async function setShipFee(orderId: string, fee: number, actor: Actor) {
+  if (!(fee >= 0) || fee > 1_000_000_000) throw new OrderError('Phí vận chuyển không hợp lệ.');
+  return tx(async (c) => {
+    const o = await lockOrder(c, orderId);
+    if (o.payment_status === 'DA_NHAN') throw new OrderError('Đơn đã nhận tiền: không đổi phí vận chuyển.');
+    if (!['CHO_DUYET', 'CHO_THANH_TOAN'].includes(o.status)) throw new OrderError('Đơn đã đóng.');
+    await c.query('UPDATE wholesale_orders SET ship_fee=$2, updated_at=now() WHERE id=$1', [orderId, Math.round(fee)]);
+    await audit(actor, 'order.ship_fee', 'order', orderId, { code: o.code, from: Number(o.ship_fee), to: Math.round(fee) }, c);
+  });
+}
+
 export async function findOrderForCustomer(code: string, phone: string) {
   let p: string;
   try { p = normalizePhone(phone); } catch { return null; }
   return one(
-    `SELECT o.id, o.code, o.status, o.tong_dt, o.payment_status, o.trade_assurance_status, o.wfs_status, o.carrier, o.tracking_no,
+    `SELECT o.id, o.code, o.status, o.tong_dt, o.ship_fee, o.ship_country, (o.tong_dt + o.ship_fee) AS amount_due, o.payment_status, o.trade_assurance_status, o.wfs_status, o.carrier, o.tracking_no,
             o.created_at, o.approval_status, o.released_by_label, ch.name AS channel_name
      FROM wholesale_orders o JOIN customers cu ON cu.id=o.customer_id JOIN sales_channels ch ON ch.id=o.channel_id
      WHERE upper(o.code)=upper($1) AND cu.phone=$2`, [code.trim(), p]);

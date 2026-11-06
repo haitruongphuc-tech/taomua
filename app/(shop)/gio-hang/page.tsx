@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { readCart, writeCart, type CartLine } from '@/components/cart';
+import { COUNTRIES } from '@/lib/countries';
 
 type Quote = { lines: { id: string; name: string; emoji: string; qty: number; tier: number | null; unit: number; total: number; error?: string; moq: number }[]; total: number; ok: boolean };
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' đ';
@@ -9,7 +10,7 @@ const fmt = (n: number) => n.toLocaleString('vi-VN') + ' đ';
 export default function CartPage() {
   const [lines, setLines] = useState<CartLine[] | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
-  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', note: '', website: '' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', note: '', website: '', country: 'VN' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [placed, setPlaced] = useState<{ code: string; total: number; needsApproval: boolean } | null>(null);
@@ -44,7 +45,7 @@ export default function CartPage() {
         <h1>Đã nhận đơn {placed.code}</h1>
         <p>Tổng tiền: <strong className="mono">{fmt(placed.total)}</strong></p>
         {placed.needsApproval
-          ? <div className="alert info">Đơn cần được xác nhận trước khi thanh toán. Bạn sẽ thấy hướng dẫn chuyển khoản khi tra cứu đơn sau khi đơn được xác nhận.</div>
+          ? <div className="alert info">Đơn cần được xác nhận trước khi thanh toán (đơn quốc tế: kèm báo phí vận chuyển qua email). / We confirm your order before payment. Bạn sẽ thấy hướng dẫn chuyển khoản khi tra cứu đơn sau khi đơn được xác nhận.</div>
           : <div className="alert ok">Đơn đã được xác nhận. Hãy tra cứu đơn để xem hướng dẫn thanh toán.</div>}
         <p className="muted">Lưu lại mã đơn. Bạn tra cứu bằng mã đơn và số điện thoại đã đặt.</p>
         <Link className="btn" href={`/don-hang?ma=${placed.code}`}>Tra cứu đơn</Link>
@@ -77,17 +78,20 @@ export default function CartPage() {
       </section>
 
       <form className="card stack" onSubmit={submit}>
-        <h2>Thông tin đặt hàng</h2>
+        <h2>Thông tin đặt hàng <span className="muted small">/ Order details</span></h2>
         <div className="form-grid">
-          <label className="field">Tên shop / người nhận<input required minLength={2} maxLength={120} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-          <label className="field">Số điện thoại<input required inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
-          <label className="field">Email (không bắt buộc)<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
+          <label className="field">Tên shop / người nhận · Name<input required minLength={2} maxLength={120} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+          <label className="field">Số điện thoại · Phone{form.country !== 'VN' ? ' (+mã nước / +country code)' : ''}<input required inputMode="tel" placeholder={form.country === 'VN' ? '09xx xxx xxx' : '+1 415 555 0100'} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
+          <label className="field">Email{form.country === 'VN' ? ' (không bắt buộc)' : ' (bắt buộc / required)'}<input type="email" required={form.country !== 'VN'} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
+          <label className="field">Giao tới · Ship to<select value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })}>
+            {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.vi} / {c.en}</option>)}</select></label>
         </div>
-        <label className="field">Địa chỉ giao hàng<textarea required minLength={5} maxLength={500} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></label>
-        <label className="field">Ghi chú<textarea maxLength={1000} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label>
+        {form.country !== 'VN' && <div className="alert info small">Đơn quốc tế: taomua báo phí vận chuyển qua email trước khi bạn thanh toán. Giá chưa gồm thuế nhập khẩu tại nước nhận. / International order: we email the shipping quote before payment. Prices exclude import duties.</div>}
+        <label className="field">Địa chỉ giao hàng · Address<textarea required minLength={5} maxLength={500} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></label>
+        <label className="field">Ghi chú · Note<textarea maxLength={1000} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label>
         <input tabIndex={-1} autoComplete="off" aria-hidden style={{ position: 'absolute', left: -9999 }} value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
         {err && <div className="alert bad">{err}</div>}
-        <button className="btn" disabled={busy || !quote.ok}>{busy ? 'Đang gửi…' : 'Đặt hàng'}</button>
+        <button className="btn" disabled={busy || !quote.ok}>{busy ? 'Đang gửi… / Sending…' : 'Đặt hàng / Place order'}</button>
         <p className="muted small">Bạn chưa phải trả tiền ngay. Tiền chuyển vào được giữ đến khi bạn xác nhận đã nhận hàng.</p>
       </form>
     </div>

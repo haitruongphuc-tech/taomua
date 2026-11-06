@@ -32,18 +32,23 @@ async function main() {
   }
 
   const suppliers = [
-    { name: 'Yiwu Trend Factory', source: '1688', country: 'CN', years: 2, rt: 600, defect: 0.04, onTime: 0.85, cert: false, inv: true },
-    { name: 'Shenzhen AudioTech', source: '1688', country: 'CN', years: 9, rt: 75, defect: 0.015, onTime: 0.95, cert: true, inv: true },
-    { name: 'Xưởng Dệt Hội An', source: 'VN_FACTORY', country: 'VN', years: 6, rt: 80, defect: 0.01, onTime: 0.96, cert: true, inv: false },
-    { name: 'Xưởng May An Phước', source: 'VN_FACTORY', country: 'VN', years: 4, rt: 60, defect: 0.008, onTime: 0.97, cert: true, inv: true },
-    { name: 'Xưởng Kim Gia - Foshan', source: '1688', country: 'CN', years: 7, rt: 120, defect: 0.02, onTime: 0.93, cert: true, inv: false },
+    // cats: ngành hàng xưởng làm được; lead: ngày sản xuất; intl: giao quốc tế được. Tất cả là xưởng giả lập.
+    { name: 'Yiwu Trend Factory', source: '1688', country: 'CN', years: 2, rt: 600, defect: 0.04, onTime: 0.85, cert: false, inv: true, cats: ['Đồ chơi'], lead: 12, intl: true },
+    { name: 'Dongguan Joy Toys', source: '1688', country: 'CN', years: 8, rt: 70, defect: 0.012, onTime: 0.95, cert: true, inv: true, cats: ['Đồ chơi'], lead: 10, intl: true },
+    { name: 'Xưởng nhựa Bình Tân', source: 'VN_FACTORY', country: 'VN', years: 5, rt: 85, defect: 0.015, onTime: 0.94, cert: true, inv: false, cats: ['Đồ chơi', 'Gia dụng'], lead: 5, intl: false },
+    { name: 'Shenzhen AudioTech', source: '1688', country: 'CN', years: 9, rt: 75, defect: 0.015, onTime: 0.95, cert: true, inv: true, cats: ['Điện tử'], lead: 15, intl: true },
+    { name: 'Ningbo Bright LED', source: '1688', country: 'CN', years: 6, rt: 90, defect: 0.018, onTime: 0.93, cert: true, inv: true, cats: ['Điện tử'], lead: 12, intl: true },
+    { name: 'Xưởng Dệt Hội An', source: 'VN_FACTORY', country: 'VN', years: 6, rt: 80, defect: 0.01, onTime: 0.96, cert: true, inv: false, cats: ['Thời trang'], lead: 7, intl: true },
+    { name: 'Xưởng May An Phước', source: 'VN_FACTORY', country: 'VN', years: 4, rt: 60, defect: 0.008, onTime: 0.97, cert: true, inv: true, cats: ['Thời trang'], lead: 6, intl: true },
+    { name: 'Xưởng Kim Gia - Foshan', source: '1688', country: 'CN', years: 7, rt: 120, defect: 0.02, onTime: 0.93, cert: true, inv: false, cats: ['Gia dụng'], lead: 14, intl: true },
+    { name: 'Xưởng inox Bình Dương', source: 'VN_FACTORY', country: 'VN', years: 10, rt: 60, defect: 0.01, onTime: 0.97, cert: true, inv: true, cats: ['Gia dụng'], lead: 6, intl: false },
   ];
   const sid: Record<string, string> = {};
   for (const s of suppliers) {
     const t = trustScore({ response_time_sec: s.rt, verified_cert: s.cert, defect_rate: s.defect, on_time_rate: s.onTime, inventory_sync: s.inv });
     const r = await one(`INSERT INTO suppliers(name, source, country, years_active, trust_score, response_time_sec, defect_rate, on_time_rate,
-      verified_cert, inventory_sync, is_simulated) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true) RETURNING id`,
-      [s.name, s.source, s.country, s.years, t.score, s.rt, s.defect, s.onTime, s.cert, s.inv]);
+      verified_cert, inventory_sync, categories, lead_time_days, ships_international, is_simulated) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,true) RETURNING id`,
+      [s.name, s.source, s.country, s.years, t.score, s.rt, s.defect, s.onTime, s.cert, s.inv, s.cats, s.lead, s.intl]);
     sid[s.name] = r.id;
   }
 
@@ -67,8 +72,15 @@ async function main() {
         sku === 'CAPY-01' ? 50 : null, sku === 'CAPY-01' ? 6.5 : sku === 'AO-3D' ? 4.2 : null, 97.5, 3.33]);
     pid[sku] = r.id;
   }
-  // Xưởng dự phòng (spec: 3 xưởng mỗi sản phẩm) — tạm gán các xưởng khác cùng nguồn.
-  await q(`UPDATE products p SET supplier_ids_backup = ARRAY(SELECT s.id FROM suppliers s WHERE s.id <> p.supplier_id ORDER BY s.trust_score DESC LIMIT 3)`);
+  // Xưởng dự phòng (spec: tối đa 3 xưởng mỗi sản phẩm) — chỉ xưởng cùng ngành hàng.
+  await q(`UPDATE products p SET supplier_ids_backup = ARRAY(SELECT s.id FROM suppliers s
+    WHERE s.id <> p.supplier_id AND p.category = ANY(s.categories) ORDER BY s.trust_score DESC LIMIT 3)`);
+  // Báo giá giả lập: mỗi xưởng cùng ngành báo một giá quanh giá vốn hiện tại (xưởng VN MOQ thấp, xưởng CN rẻ hơn nhưng MOQ cao).
+  await q(`INSERT INTO supplier_offers(supplier_id, product_id, product_text, category, unit_cost, currency, moq, lead_time_days, source, is_simulated, verified)
+    SELECT s.id, p.id, p.name, p.category,
+      CASE WHEN s.id = p.supplier_id THEN p.cost ELSE round(p.cost * (CASE WHEN s.country='CN' THEN 0.92 ELSE 1.08 END) / 100) * 100 END,
+      'VND', CASE WHEN s.country='CN' THEN 300 ELSE 50 END, s.lead_time_days, 'NHAP_TAY', true, false
+    FROM products p JOIN suppliers s ON p.category = ANY(s.categories)`);
 
   const ceo = await one('SELECT id FROM users WHERE role=$1', ['CEO']);
   await q(`INSERT INTO price_comparisons(product_id, platform, price, qty_basis, source_url, checked_by) VALUES

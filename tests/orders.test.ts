@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { pool, q, one } from '@/lib/db';
-import { createOrder, decideApproval, markPaid, shipOrder, releaseEscrow, refundOrder, OrderError } from '@/lib/orders';
+import { createOrder, decideApproval, markPaid, shipOrder, releaseEscrow, refundOrder, OrderError, setShipFee, findOrderForCustomer } from '@/lib/orders';
 import { importChannelOrders, parseOrderCsv } from '@/lib/channels';
 import { parseStatement, reconcile } from '@/lib/reconcile';
 
@@ -98,5 +98,25 @@ describe('đối soát', () => {
     expect((await one('SELECT trade_assurance_status FROM wholesale_orders WHERE id=$1', [o.id])).trade_assurance_status).toBe('HOLD');
     const again = await reconcile(rows, { id: ceo.id, label: 'CEO' });
     expect(again.duplicates).toBe(2);
+  });
+});
+
+describe('đơn quốc tế', () => {
+  it('cần email, tối thiểu Cấp 2, phí vận chuyển cộng vào số tiền khách trả và đối soát khớp', async () => {
+    const base = { channelCode: 'taomua', address: '1 Market St, San Francisco CA', country: 'US', items: [{ productId: pid, quantity: 20 }] };
+    await expect(createOrder({ ...base, customer: { name: 'US Shop', phone: '+1 415 555 0100' } }, sys)).rejects.toThrow(/email/i);
+    const o = await createOrder({ ...base, customer: { name: 'US Shop', phone: '+1 415 555 0100', email: 'buyer@example.com' } }, sys);
+    expect(o.cap_duyet).toBe(2);
+    expect(o.ship_country).toBe('US');
+    expect(o.approval_status).toBe('PENDING');
+    await decideApproval(o.id, { id: ceo.id, role: 'CEO', label: 'CEO' }, 'APPROVED');
+    await setShipFee(o.id, 850000, sys);
+    const due = Number(o.tong_dt) + 850000;
+    const found = await findOrderForCustomer(o.code, '+14155550100');
+    expect(Number(found.amount_due)).toBe(due);
+    const r = await reconcile([{ date: '2026-11-06', amount: due, description: `TT ${o.code}`, ref: 'INTL-1' }], { id: ceo.id, label: 'CEO' });
+    expect(r.matchedOrders).toBe(1);
+    expect((await one('SELECT payment_status FROM wholesale_orders WHERE id=$1', [o.id])).payment_status).toBe('DA_NHAN');
+    await expect(setShipFee(o.id, 1, sys)).rejects.toThrow(/nhận tiền/);
   });
 });

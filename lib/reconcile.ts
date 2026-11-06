@@ -43,8 +43,8 @@ export async function reconcile(rows: BankRow[], actor: Actor & { id: string }) 
       if (r.amount > 0) {
         const code = r.description.toUpperCase().match(/TM\d{4,}/)?.[0];
         if (!code) continue;
-        const o = (await c.query('SELECT id, tong_dt, status, payment_status FROM wholesale_orders WHERE code=$1', [code])).rows[0];
-        if (!o || Number(o.tong_dt) !== r.amount) continue;
+        const o = (await c.query('SELECT id, tong_dt, ship_fee, status, payment_status FROM wholesale_orders WHERE code=$1', [code])).rows[0];
+        if (!o || Number(o.tong_dt) + Number(o.ship_fee) !== r.amount) continue; // tiền hàng + phí vận chuyển (đơn quốc tế)
         if (o.payment_status !== 'DA_NHAN' && o.status === 'CHO_THANH_TOAN') await markPaid(o.id, actor, c);
         await c.query('UPDATE bank_transactions SET matched_order_id=$2 WHERE id=$1', [tid, o.id]);
         matchedOrders++;
@@ -56,7 +56,7 @@ export async function reconcile(rows: BankRow[], actor: Actor & { id: string }) 
     const from = rows.reduce((a, r) => (r.date < a ? r.date : a), rows[0].date);
     const to = rows.reduce((a, r) => (r.date > a ? r.date : a), rows[0].date);
     const actual = (await c.query('SELECT COALESCE(sum(amount),0) AS s FROM bank_transactions WHERE amount > 0 AND txn_date BETWEEN $1 AND $2', [from, to])).rows[0].s;
-    const expected = (await c.query(`SELECT COALESCE(sum(tong_dt),0) AS s FROM wholesale_orders WHERE payment_status='DA_NHAN'
+    const expected = (await c.query(`SELECT COALESCE(sum(tong_dt + ship_fee),0) AS s FROM wholesale_orders WHERE payment_status='DA_NHAN'
       AND (paid_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date BETWEEN $1 AND $2`, [from, to])).rows[0].s;
     const unmatched = Number((await c.query('SELECT count(*) AS n FROM bank_transactions WHERE batch_id=$1 AND matched_order_id IS NULL AND matched_payout_id IS NULL', [batch])).rows[0].n);
     const base = Math.max(Number(expected), Number(actual), 1);

@@ -180,3 +180,57 @@ describe('quy tắc 7 agent', async () => {
     expect(s[0].zh).toContain('4.5');
   });
 });
+
+describe('AI tìm xưởng (so khớp ngành, giá, số lượng)', async () => {
+  const { rankCandidates, recommend, inquiryMessage } = await import('@/lib/sourcing');
+  const { phoneKey } = await import('@/lib/countries');
+  const sup = (id: string, trust: number, defect: number, cats = ['Gia dụng'], intl = false) => ({ id, name: id, categories: cats, trust_score: trust, defect_rate: defect, ships_international: intl });
+  const off = (id: string, cost: number, moq: number, cat = 'Gia dụng', text = 'Thau inox') => ({ id, product_text: text, category: cat, unit_cost: cost, moq, verified: true });
+  const cands = [
+    { supplier: sup('re-nhung-kem', 60, 0.05), offer: off('o1', 9000, 100) },
+    { supplier: sup('tot-moq-cao', 92, 0.01), offer: off('o2', 10000, 1000) },
+    { supplier: sup('tot-moq-thap', 90, 0.01), offer: off('o3', 11000, 50) },
+    { supplier: sup('khac-nganh', 99, 0.0, ['Điện tử']), offer: off('o4', 5000, 10, 'Điện tử') },
+    { supplier: sup('chua-bao-gia', 95, 0.01), offer: null },
+  ];
+  it('chỉ xét đúng ngành; xưởng không đạt Trust/lỗi không được đề xuất', () => {
+    const r = rankCandidates({ category: 'Gia dụng', text: 'Thau inox', quantity: 200, targetUnitPrice: 20000 }, cands);
+    expect(r.map((x) => x.supplier.id)).not.toContain('khac-nganh');
+    expect(r.find((x) => x.supplier.id === 're-nhung-kem')!.eligible).toBe(false);
+    expect(r.find((x) => x.supplier.id === 'chua-bao-gia')!.reasons.join()).toMatch(/hỏi giá/);
+  });
+  it('ưu tiên xưởng đủ MOQ cho số lượng cần; MOQ cao thì đề xuất bán thử', () => {
+    const need = { category: 'Gia dụng', text: 'Thau inox', quantity: 200, targetUnitPrice: 20000 };
+    const rec = recommend(need, rankCandidates(need, cands))!;
+    expect(rec.primary.supplier.id).toBe('tot-moq-thap');
+    expect(rec.backups.map((b) => b.supplier.id)).toContain('tot-moq-cao');
+    const big = { ...need, quantity: 2000 };
+    expect(recommend(big, rankCandidates(big, cands))!.primary.supplier.id).toBe('tot-moq-cao');
+  });
+  it('giá báo khách: giữ giá khách muốn nếu đạt biên 15%, không thì lấy biên mục tiêu 30%', () => {
+    const need = { category: 'Gia dụng', text: 'Thau inox', quantity: 200, targetUnitPrice: 20000 };
+    expect(recommend(need, rankCandidates(need, cands))!.unitPrice).toBe(20000);
+    const low = { ...need, targetUnitPrice: 11500 };
+    const r = recommend(low, rankCandidates(low, cands));
+    expect(r === null || r.margin >= 15).toBe(true);
+    const none = { ...need, targetUnitPrice: null };
+    expect(recommend(none, rankCandidates(none, cands))!.margin).toBeGreaterThanOrEqual(30);
+  });
+  it('không có ngành: so theo mô tả báo giá', () => {
+    const r = rankCandidates({ category: null, text: 'thau inox 30cm', quantity: 100 }, cands);
+    expect(r.every((x) => x.offer)).toBe(true);
+    expect(r.length).toBeGreaterThan(0);
+  });
+  it('tin hỏi giá có số lượng và yêu cầu QC / thanh toán', () => {
+    const m = inquiryMessage({ productVi: 'Thau inox', quantity: 300, country: 'US' });
+    expect(m.zh).toContain('300');
+    expect(m.vi).toMatch(/giao quốc tế/);
+  });
+  it('số điện thoại: Việt Nam về 0xxx, nước ngoài giữ +mã nước', () => {
+    expect(phoneKey('+84 912 345 678')).toBe('0912345678');
+    expect(phoneKey('0912.345.678')).toBe('0912345678');
+    expect(phoneKey('+1 (415) 555-0100')).toBe('+14155550100');
+    expect(phoneKey('0033 6 12 34 56 78')).toBe('+33612345678');
+    expect(phoneKey('12345')).toBeNull();
+  });
+});

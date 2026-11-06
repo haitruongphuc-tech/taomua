@@ -25,7 +25,12 @@ async function save(fd: FormData) {
       verified_cert: fd.get('verified_cert') === 'on',
       inventory_sync: fd.get('inventory_sync') === 'on',
       moq: Math.max(1, Math.round(Number(fd.get('moq')) || 10)),
+      categories: String(fd.get('categories') ?? '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 20),
+      lead_time_days: fd.get('lead_time_days') ? Math.max(0, Math.round(Number(fd.get('lead_time_days')))) : null,
+      ships_international: fd.get('ships_international') === 'on',
+      is_simulated: fd.get('is_simulated') === 'on',
     };
+    if (!d.categories.length) throw new UserError('Cần ít nhất một ngành hàng để AI tìm xưởng đúng ngành.');
     if (!d.name) throw new UserError('Cần tên xưởng.');
     if (!SOURCES.includes(d.source)) throw new UserError('Nguồn không hợp lệ.');
     const score = trustScore(d).score;
@@ -56,7 +61,11 @@ function SupplierFields({ s }: { s?: any }) {
       <label className="field">Giao đúng hạn (%)<input name="on_time_pct" type="number" step="0.1" min={0} max={100} defaultValue={s ? (s.on_time_rate * 100).toFixed(1) : 90} /></label>
       <label className="field">MOQ<input name="moq" type="number" min={1} defaultValue={s?.moq ?? 10} /></label>
       <label className="row"><input type="checkbox" name="verified_cert" defaultChecked={s?.verified_cert} /> Có chứng nhận đã xác minh</label>
+      <label className="field">Ngành hàng (cách nhau dấu phẩy)<input name="categories" required list="nganh" defaultValue={(s?.categories ?? []).join(', ')} placeholder="Đồ chơi, Gia dụng" /></label>
+      <label className="field">Thời gian sản xuất (ngày)<input name="lead_time_days" type="number" min={0} defaultValue={s?.lead_time_days ?? ''} /></label>
       <label className="row"><input type="checkbox" name="inventory_sync" defaultChecked={s?.inventory_sync} /> Đồng bộ tồn kho</label>
+      <label className="row"><input type="checkbox" name="ships_international" defaultChecked={s?.ships_international} /> Giao quốc tế được</label>
+      <label className="row"><input type="checkbox" name="is_simulated" defaultChecked={s ? s.is_simulated : false} /> Dữ liệu giả lập</label>
     </>
   );
 }
@@ -65,16 +74,19 @@ export default async function Suppliers({ searchParams }: { searchParams: { ok?:
   const u = await requireUser('orders.view');
   const rows = await q(`SELECT s.*, (SELECT count(*)::int FROM products p WHERE p.supplier_id=s.id) AS n_products FROM suppliers s ORDER BY trust_score DESC`);
   const edit = can(u, 'suppliers.edit');
+  const cats = (await q('SELECT DISTINCT category AS c FROM products UNION SELECT DISTINCT unnest(categories) FROM suppliers ORDER BY 1')).map((r) => r.c);
   return (
     <div className="stack">
       <h1>Xưởng</h1>
       <Flash sp={searchParams} />
       <div className="alert info small">TrustScore đang tạm tính 5 yếu tố: phản hồi ≤ 90 giây ({TRUST_WEIGHTS.response}), chứng nhận ({TRUST_WEIGHTS.cert}), tỷ lệ lỗi ({TRUST_WEIGHTS.defect}), đúng hạn ({TRUST_WEIGHTS.onTime}), đồng bộ tồn kho ({TRUST_WEIGHTS.inventory}). Chờ danh sách 19 yếu tố từ chủ dự án.</div>
+      <datalist id="nganh">{cats.map((c) => <option key={c} value={c} />)}</datalist>
       <div className="table-wrap"><table>
-        <thead><tr><th>Xưởng</th><th>Nguồn</th><th className="num">TrustScore</th><th className="num">Phản hồi</th><th className="num">Lỗi</th><th className="num">Đúng hạn</th><th className="num">Sản phẩm</th></tr></thead>
+        <thead><tr><th>Xưởng</th><th>Ngành hàng</th><th>Nguồn</th><th className="num">TrustScore</th><th className="num">Phản hồi</th><th className="num">Lỗi</th><th className="num">Đúng hạn</th><th className="num">Sản phẩm</th></tr></thead>
         <tbody>{rows.map((s) => (
           <tr key={s.id}>
             <td>{s.name}<div className="small muted">{s.country} · {s.years_active} năm{s.verified_cert ? ' · đã xác minh' : ''}{s.is_simulated ? ' · giả lập' : ''}</div></td>
+            <td className="small">{(s.categories ?? []).join(', ') || <span className="badge bad">chưa có ngành</span>}{s.ships_international ? <div className="muted">giao quốc tế</div> : null}</td>
             <td>{s.source}</td><td className="num"><b>{s.trust_score}</b></td><td className="num">{s.response_time_sec}s</td>
             <td className="num">{(s.defect_rate * 100).toFixed(1)}%</td><td className="num">{(s.on_time_rate * 100).toFixed(0)}%</td><td className="num">{s.n_products}</td>
           </tr>

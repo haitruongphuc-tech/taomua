@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { TIERS } from '../pricing';
 import { UserError } from '../action';
+import { chooseOfferTx } from '../sourcing-db';
 
 export type ActionRow = { id: string; kind: string; detail: any };
 
@@ -47,6 +48,8 @@ export async function applyAction(c: PoolClient, a: ActionRow): Promise<string> 
     case 'TRANSLATE':
       await c.query(`UPDATE products SET name_i18n=$2, updated_at=now() WHERE id=$1`, [d.product_id, JSON.stringify(d.names)]);
       return 'Đã lưu tên 7 ngôn ngữ.';
+    case 'SOURCING_CHOICE':
+      return chooseOfferTx(c, d.request_id, d.offer_id, null);
     case 'NOTE':
       return 'Đã ghi nhận.';
     default:

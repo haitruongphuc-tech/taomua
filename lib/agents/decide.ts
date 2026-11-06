@@ -36,6 +36,11 @@ export async function decideAgentAction(id: string, user: Decider, op: 'approve'
         return `Không áp dụng được: ${e.message}`;
       }
       await c.query("UPDATE agent_actions SET status='DA_DUYET', decided_by=$2, decided_label=$3, decided_at=now() WHERE id=$1", [id, user.id, user.label]);
+      if (a.kind === 'SOURCING_CHOICE') {
+        await c.query("UPDATE sourcing_requests SET decided_by=$2 WHERE id=$1", [a.detail.request_id, user.id]);
+        await c.query(`UPDATE agent_actions SET status='TU_CHOI', decided_by=$2, decided_label=$3, decided_at=now()
+          WHERE status IN ('DE_XUAT','TIN') AND entity='sourcing' AND entity_id=$1 AND id <> $4`, [a.entity_id, user.id, `${user.label} (đã chọn xưởng khác)`, id]);
+      }
       await audit({ id: user.id, label: user.label }, 'agent.approve', 'agent_action', id, { kind: a.kind, title: a.title }, c);
       return msg;
     }
