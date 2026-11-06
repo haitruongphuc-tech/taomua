@@ -25,7 +25,14 @@ Tài khoản seed: `ceo@`, `truongnhom@`, `ketoan@`, `nhanvien@taomua.local`. Đ
 
 ## Đưa lên taomua.com
 
-Hướng dẫn từng bước (VPS, tên miền, HTTPS, AI 24/7, sao lưu, cập nhật): [`docs/DEPLOY_TAOMUA_COM.md`](docs/DEPLOY_TAOMUA_COM.md).
+VPS Ubuntu đã trỏ tên miền: chạy bằng root
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/haitruongphuc-tech/taomua/main/deploy/install.sh -o taomua-install.sh
+bash taomua-install.sh taomua.com EMAIL_CUA_BAN
+```
+
+Cập nhật về sau: `taomua-update`. Chi tiết và cách làm tay: [`docs/DEPLOY_TAOMUA_COM.md`](docs/DEPLOY_TAOMUA_COM.md).
 
 ## Cấu trúc
 

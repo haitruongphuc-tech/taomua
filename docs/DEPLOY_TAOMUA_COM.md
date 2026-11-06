@@ -1,5 +1,45 @@
 # Hướng dẫn đưa taomua.com lên mạng
 
+## ⚡ Cách nhanh: 1 lệnh (VPS đã có, tên miền đã trỏ về IP VPS)
+
+Đăng nhập VPS bằng root (`ssh root@IP_VPS`), chạy 2 dòng sau. Thay email bằng email nhận thông báo chứng chỉ HTTPS, hoặc bỏ trống:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/haitruongphuc-tech/taomua/main/deploy/install.sh -o taomua-install.sh
+bash taomua-install.sh taomua.com EMAIL_CUA_BAN
+```
+
+Chờ khoảng 5–10 phút. Script tự làm toàn bộ các mục 2–7 bên dưới:
+
+- cài Node 20, PostgreSQL, Nginx, pm2;
+- tạo database với mật khẩu ngẫu nhiên;
+- tải mã nguồn, tạo `.env` (`SITE_URL=https://taomua.com`, `SIM_ACTIONS=off`), build;
+- tạo tài khoản quản trị;
+- chạy web và AI 24/7, tự chạy lại khi khởi động máy;
+- cấp HTTPS miễn phí;
+- sao lưu database lúc 2 giờ sáng mỗi ngày.
+
+Khi xong:
+
+| Việc | Lệnh / nơi |
+|---|---|
+| Xem mật khẩu quản trị ban đầu | `cat /root/taomua-tai-khoan.txt` → đăng nhập https://taomua.com/quan-tri, đổi mật khẩu, tạo tài khoản thật, khóa tài khoản `@taomua.local` |
+| Nhập MST, địa chỉ, ngân hàng, `AI_API_KEY`… | `nano /home/taomua/app/.env`, sau đó chạy `taomua-update` |
+| Cập nhật bản mới sau mỗi lần commit lên GitHub | `taomua-update` (tự sao lưu database trước) |
+| Xem nhật ký web / AI | `sudo -u taomua pm2 logs` |
+
+Ghi chú:
+
+- Chạy lại script an toàn: phần nào đã có thì bỏ qua, không xóa dữ liệu.
+- Web chỉ nghe ở `127.0.0.1`, Nginx đứng trước lo HTTPS. Script không đổi tường lửa, chỉ mở thêm cổng 80/443 nếu ufw đang bật.
+- Dùng **Cloudflare** (đám mây cam) thì tạm tắt proxy (chuyển sang "DNS only") khi chạy script để cấp HTTPS, xong bật lại với chế độ SSL "Full (strict)".
+- Cổng 80 đang bị phần mềm khác dùng (Apache, aaPanel…): script dừng và báo; tắt phần mềm đó rồi chạy lại.
+- Script tải mã từ kho GitHub công khai. Nếu sau này chuyển kho sang riêng tư, cần thêm khóa truy cập (deploy key).
+
+Phần dưới đây là **cách làm tay từng bước**, chỉ cần khi muốn tự kiểm soát hoặc khi script báo lỗi.
+
+---
+
 Cách khuyên dùng: **1 máy chủ VPS Ubuntu**. Trên máy chủ cài:
 
 - Node.js chạy web;
