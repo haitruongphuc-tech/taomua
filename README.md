@@ -23,6 +23,10 @@ npm test                        # cần database taomua_test (hoặc TEST_DATABA
 
 Tài khoản seed: `ceo@`, `truongnhom@`, `ketoan@`, `nhanvien@taomua.local`. Đổi mật khẩu ở *Quản trị → Đổi mật khẩu*.
 
+## Đưa lên taomua.com
+
+Hướng dẫn từng bước (VPS, tên miền, HTTPS, AI 24/7, sao lưu, cập nhật): [`docs/DEPLOY_TAOMUA_COM.md`](docs/DEPLOY_TAOMUA_COM.md).
+
 ## Cấu trúc
 
 | Phần | Đường dẫn |
