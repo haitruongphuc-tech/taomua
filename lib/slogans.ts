@@ -11,6 +11,6 @@ export const SLOGANS = {
 export function sloganFor(path: string): string {
   if (path === '/' || path.startsWith('/?')) return SLOGANS.gia;
   if (path.startsWith('/san-pham') || path.startsWith('/bao-gia')) return SLOGANS.chietkhau;
-  if (path.startsWith('/gio-hang')) return SLOGANS.thuong;
+  if (path.startsWith('/gio-hang') || path.startsWith('/shop')) return SLOGANS.thuong;
   return SLOGANS.vui;
 }

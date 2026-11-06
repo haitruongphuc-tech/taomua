@@ -87,6 +87,14 @@ Nút tổng tắt thì không gì tự làm, trừ phân tích dữ liệu. Khô
 
 **Truy xuất nguồn gốc** (`/truy-xuat/[sku]`, RYN-TRACE): QR trên trang sản phẩm và trang quản trị; quét ra 7 ngôn ngữ theo máy người quét (xưởng, quốc gia, TrustScore, QC, lỗi, đúng hạn, giá sỉ). Không hiện giá vốn, biên.
 
+**9mua bán lẻ** (`/shop`, spec trang 3): bảng tin dọc kiểu TikTok các sản phẩm đang bán trên kênh 9mua, Mua ngay 1 chạm (nhớ thông tin giao hàng), 1–9 cái; từ 10 cái mời mua sỉ. Giá lấy từ niêm yết kênh 9mua ở máy chủ, đơn đi qua cùng quy trình duyệt, giữ tiền, đối soát.
+
+**CSKH AI** (`lib/cskh.ts`, nút "Hỏi AI" mọi trang cửa hàng): phân loại câu hỏi (giá sỉ, tồn kho, trạng thái đơn, vận chuyển, thanh toán, hóa đơn, khiếu nại, gặp người) và trả lời bằng dữ liệu thật; tra đơn cần mã + số điện thoại; câu tự do dùng AI ngôn ngữ khi có khóa, không thì chuyển người. Nhật ký và tỉ lệ AI tự trả lời ở trang Khiếu nại.
+
+**Marketing** (`/quan-tri/marketing`, `lib/marketing.ts`): chiến dịch TikTok / Facebook / Google / Zalo Ads, số liệu ngày bằng CSV; RYN-SALES 7 ngày: ROAS < 2 hoặc CTR < 2% tự tạm dừng, CTR > 3% và ROAS đạt mục tiêu đề xuất +20% ngân sách; khóa chi quảng cáo ở Kiểm soát chi thì dừng hết.
+
+**Logistics** (`/quan-tri/logistics`, `lib/logistics.ts`): bảng giá hãng theo vùng (nội tỉnh, nội miền, liên miền, quốc tế) và khối lượng; RYN-LOGI chọn hãng rẻ nhất cho đơn đang chuẩn bị, trang đơn chọn sẵn hãng đó.
+
 **Giữ tiền**: tiền khách chuyển được giữ đến khi khách xác nhận đã nhận hàng, hoặc CEO xác nhận. CEO có thể hoàn tiền từ khoản đang giữ.
 
 **Kênh bán**: taomua.com là kênh riêng. Mọi nền tảng khác là một dòng trong `sales_channels` với phí sàn riêng. Chưa kênh nào có API: đơn được nhập tay hoặc bằng CSV, sản phẩm xuất CSV để đăng thủ công. Khi có API, viết một `ChannelConnector` trong `lib/channels.ts`.

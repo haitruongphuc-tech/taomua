@@ -31,6 +31,10 @@ export async function setupItems(): Promise<SetupItem[]> {
        AND NOT EXISTS (SELECT 1 FROM supplier_offers o WHERE o.product_id=p.id AND o.supplier_id=p.supplier_id AND o.verified)`),
   ]);
   const https = (process.env.SITE_URL ?? '').startsWith('https://');
+  const [simRates, rates, simAds] = await Promise.all([
+    n('SELECT count(*)::int n FROM shipping_rates WHERE is_simulated'), n('SELECT count(*)::int n FROM shipping_rates'),
+    n('SELECT count(*)::int n FROM ad_campaigns WHERE is_simulated'),
+  ]);
 
   return [
     // --- Bắt buộc trước khi nhận đơn và tiền thật ---
@@ -81,6 +85,10 @@ export async function setupItems(): Promise<SetupItem[]> {
       detail: `${noTrace} sản phẩm chưa có CTR bán thử; RYN-SALES chưa quyết định nhập lớn / dừng được.` },
     { group: 'Số liệu cần nhập', label: 'Tên sản phẩm 7 ngôn ngữ', status: noI18n ? (env('AI_API_KEY') ? 'THIEU' : 'CHUA_LAM') : 'OK', where: 'Tự động khi có AI_API_KEY',
       detail: `${noI18n} sản phẩm đang bán chưa có tên tiếng Trung/Anh/...` },
+    { group: 'Dữ liệu giả lập', label: 'Bảng giá vận chuyển', status: !rates ? 'THIEU' : simRates ? 'GIA_LAP' : 'OK', href: '/quan-tri/logistics', where: 'Quản trị → Logistics',
+      detail: `${simRates}/${rates} giá hãng là giả lập; nhập theo hợp đồng GHN / GHTK / J&T. Khối lượng sản phẩm cũng cần cân thật.` },
+    { group: 'Dữ liệu giả lập', label: 'Chiến dịch quảng cáo mẫu', status: simAds ? 'GIA_LAP' : 'OK', href: '/quan-tri/marketing', where: 'Quản trị → Marketing',
+      detail: `${simAds} chiến dịch giả lập để thử quy tắc ROAS / CTR; kết thúc hoặc xóa khi chạy thật.` },
     { group: 'Số liệu cần nhập', label: 'Danh sách 19 yếu tố TrustScore và trọng số', status: 'GIA_LAP', where: 'lib/trust.ts', detail: 'Đang tạm tính 5 yếu tố.' },
 
     // --- Chờ nhà cung cấp / quyết định ---

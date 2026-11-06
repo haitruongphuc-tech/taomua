@@ -11,6 +11,8 @@ import type { Controls } from '../payouts';
 import { aiEnabled, translate7, classify } from '../ai';
 import { createSourcingRequest, evaluateRequest, guessCategory } from '../sourcing-db';
 import { fold } from '../sourcing';
+import { adDecision, adMetrics, SCALE_STEP } from '../marketing';
+import { cheapest, guessZone, ZONE_TEXT } from '../logistics';
 import { notifyText } from '../notify';
 import { audit, type Actor } from '../audit';
 import { applyAction } from './apply';
@@ -25,14 +27,14 @@ export const AGENTS = {
   'RYN-NEGO': { name: 'Negotiation', job: 'Soạn 4 kịch bản đàm phán tiếng Trung kèm bản dịch cho xưởng 1688, mục tiêu giảm 10%.' },
   'RYN-PRICE': { name: 'Pricing Brain', job: 'Giữ biên ròng ≥ 15%, giảm 2% khi đối thủ rẻ hơn, cảnh báo biên > 150%.' },
   'RYN-TRACE': { name: 'Traceability', job: 'Lưu lịch sử giá vốn, cảnh báo xưởng tăng giá ≥ 10%, kiểm QC < 98%.' },
-  'RYN-SALES': { name: 'Sales Brain', job: 'Tự báo giá yêu cầu sỉ, quyết định bán thử (CTR > 3% nhập lớn, < 2% dừng), dịch tên 7 ngôn ngữ.' },
-  'RYN-LOGI': { name: 'Logistics & Finance', job: 'Theo dõi biên an toàn vốn (< 25% cảnh báo, < 20% khóa nhập mới), đơn quá hạn duyệt, chờ thanh toán, chờ giải ngân.' },
+  'RYN-SALES': { name: 'Sales Brain', job: 'Tự báo giá yêu cầu sỉ, quyết định bán thử (CTR > 3% nhập lớn, < 2% dừng), quảng cáo (ROAS < 2 hoặc CTR < 2% dừng, CTR > 3% tăng 20% ngân sách), dịch tên 7 ngôn ngữ.' },
+  'RYN-LOGI': { name: 'Logistics & Finance', job: 'Chọn hãng vận chuyển rẻ nhất cho đơn đang chuẩn bị, theo dõi biên an toàn vốn (< 25% cảnh báo, < 20% khóa nhập mới), đơn quá hạn duyệt, chờ thanh toán, chờ giải ngân.' },
 } as const;
 export type AgentCode = keyof typeof AGENTS;
 
 export type Finding = {
   agent: AgentCode;
-  kind: 'PRICE_CHANGE' | 'SWITCH_SUPPLIER' | 'SOURCING_CHOICE' | 'PRODUCT_STATUS' | 'CONTROL_SET' | 'RFQ_QUOTE' | 'SUPPLIER_TRUST' | 'TRANSLATE' | 'NOTE';
+  kind: 'PRICE_CHANGE' | 'SWITCH_SUPPLIER' | 'SOURCING_CHOICE' | 'AD_STATUS' | 'AD_BUDGET' | 'PRODUCT_STATUS' | 'CONTROL_SET' | 'RFQ_QUOTE' | 'SUPPLIER_TRUST' | 'TRANSLATE' | 'NOTE';
   severity?: 'INFO' | 'WARN' | 'DANGER';
   title: string;
   detail?: Record<string, unknown>;
@@ -206,7 +208,7 @@ async function trace(): Promise<Finding[]> {
   return out;
 }
 
-async function sales(): Promise<Finding[]> {
+async function sales(ctx: Ctx): Promise<Finding[]> {
   const out: Finding[] = [];
   const prods = await q("SELECT * FROM products WHERE published AND status <> 'PAUSED'");
   const rfqs = await q("SELECT * FROM rfqs WHERE status='MOI' ORDER BY created_at LIMIT 50");
@@ -255,6 +257,26 @@ async function sales(): Promise<Finding[]> {
         title: `${p.name}: CTR ${p.latr_ctr}% < 2%, tạm dừng để tránh tồn kho`, detail: { product_id: p.id, from: p.status, to: 'PAUSED' } });
     }
   }
+  // Quảng cáo: 7 ngày gần nhất. ROAS < 2 hoặc CTR < 2% → tự tạm dừng; CTR > 3% và ROAS đạt mục tiêu → đề xuất +20% ngân sách/ngày.
+  const ads = await q(`SELECT c.id, c.name, c.platform, c.status, c.daily_budget, c.roas_target,
+      count(s.day)::int AS days, COALESCE(sum(s.spend),0)::bigint AS spend, COALESCE(sum(s.impressions),0)::bigint AS impressions,
+      COALESCE(sum(s.clicks),0)::bigint AS clicks, COALESCE(sum(s.orders),0)::bigint AS orders, COALESCE(sum(s.revenue),0)::bigint AS revenue
+    FROM ad_campaigns c LEFT JOIN ad_stats s ON s.campaign_id=c.id AND s.day >= CURRENT_DATE - 7
+    WHERE c.status='DANG_CHAY' GROUP BY c.id`);
+  for (const a of ads) {
+    const totals = { days: a.days, spend: Number(a.spend), impressions: Number(a.impressions), clicks: Number(a.clicks), orders: Number(a.orders), revenue: Number(a.revenue) };
+    const d = ctx.ctl.NAP_ADS ? adDecision(totals, Number(a.roas_target)) : { action: 'STOP' as const, reason: 'CEO đang khóa chi quảng cáo (Kiểm soát chi)' };
+    if (d.action === 'STOP') {
+      out.push({ agent: 'RYN-SALES', kind: 'AD_STATUS', severity: 'WARN', level: 2, auto: true, entity: 'ad_campaign', entityId: a.id, dedupe: `ad-stop:${a.id}`,
+        title: `Tạm dừng quảng cáo ${a.platform} "${a.name}": ${d.reason}`, detail: { campaign_id: a.id, from: 'DANG_CHAY', to: 'TAM_DUNG', ...adMetrics(totals) } });
+    } else if (d.action === 'SCALE') {
+      const to = Math.round((Number(a.daily_budget) * (1 + SCALE_STEP)) / 1000) * 1000;
+      out.push({ agent: 'RYN-SALES', kind: 'AD_BUDGET', level: levelByValue((to - Number(a.daily_budget)) * 30) === 1 ? 2 : levelByValue((to - Number(a.daily_budget)) * 30),
+        entity: 'ad_campaign', entityId: a.id, dedupe: `ad-scale:${a.id}:${to}`,
+        title: `Tăng ngân sách ${a.platform} "${a.name}" ${fmt(Number(a.daily_budget))} → ${fmt(to)} đ/ngày: ${d.reason}`,
+        detail: { campaign_id: a.id, from: Number(a.daily_budget), to, ...adMetrics(totals) } });
+    }
+  }
   if (aiEnabled()) {
     const need = await q(`SELECT id, name FROM products WHERE published AND (name_i18n = '{}'::jsonb OR NOT name_i18n ? 'zh') LIMIT 5`);
     for (const p of need) {
@@ -295,6 +317,21 @@ async function logi(ctx: Ctx): Promise<Finding[]> {
   for (const o of unpaid) out.push({ agent: 'RYN-LOGI', kind: 'NOTE', entity: 'order', entityId: o.id, dedupe: `unpaid:${o.id}`, title: `Đơn ${o.code}: đã duyệt hơn 3 ngày chưa thanh toán, cần nhắc khách.` });
   const held = await q(`SELECT id, code FROM wholesale_orders WHERE status='DA_GIAO' AND trade_assurance_status='HOLD' AND updated_at < now() - interval '7 days'`);
   for (const o of held) out.push({ agent: 'RYN-LOGI', kind: 'NOTE', entity: 'order', entityId: o.id, dedupe: `held:${o.id}`, title: `Đơn ${o.code}: giao hơn 7 ngày, khách chưa xác nhận. CEO xem xét giải ngân.` });
+  // Chọn hãng vận chuyển rẻ nhất cho đơn đang chuẩn bị (bảng giá trong Logistics).
+  const rates = await q('SELECT * FROM shipping_rates WHERE active');
+  if (rates.length) {
+    const prep = await q(`SELECT o.id, o.code, o.ship_address, o.ship_country,
+        (SELECT COALESCE(sum(i.quantity * p.weight_grams),0) FROM order_items i JOIN products p ON p.id=i.product_id WHERE i.order_id=o.id)::bigint AS grams
+      FROM wholesale_orders o WHERE o.status='DANG_CHUAN_BI'`);
+    for (const o of prep) {
+      const zone = guessZone(o.ship_address, o.ship_country);
+      const list = cheapest(rates, zone, Number(o.grams));
+      if (!list.length) continue;
+      out.push({ agent: 'RYN-LOGI', kind: 'NOTE', entity: 'order', entityId: o.id, dedupe: `carrier:${o.id}:${list[0].carrier}`,
+        title: `Đơn ${o.code} (${ZONE_TEXT[zone]}, ${(Number(o.grams) / 1000).toLocaleString('vi-VN')} kg): gửi ${list[0].carrier} ${fmt(list[0].fee)} đ — rẻ nhất trong ${list.length} hãng`,
+        detail: { zone, grams: Number(o.grams), so_sanh: list } });
+    }
+  }
   const payouts = await q(`SELECT id, amount, payee FROM payouts WHERE status='DE_XUAT' AND created_at < now() - interval '24 hours'`);
   for (const p of payouts) out.push({ agent: 'RYN-LOGI', kind: 'NOTE', severity: 'WARN', entity: 'payout', entityId: p.id, dedupe: `payout-wait:${p.id}`, title: `Khoản chi ${fmt(p.amount)} đ cho ${p.payee} chờ duyệt hơn 24 giờ.` });
   return out;

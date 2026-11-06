@@ -82,6 +82,18 @@ async function main() {
       'VND', CASE WHEN s.country='CN' THEN 300 ELSE 50 END, s.lead_time_days, 'NHAP_TAY', true, false
     FROM products p JOIN suppliers s ON p.category = ANY(s.categories)`);
 
+  // Khối lượng mỗi cái đã đóng gói (giả lập).
+  const weights: Record<string, number> = { 'CAPY-01': 80, 'TWS-PRO': 150, 'TOTE-LUA': 200, 'AO-3D': 250, 'THAU-304': 400, 'BINH-500': 350, 'LED-5M': 300 };
+  for (const [sku, g] of Object.entries(weights)) await q('UPDATE products SET weight_grams=$2 WHERE sku=$1', [sku, g]);
+  // Bảng giá vận chuyển giả lập (cần cập nhật theo hợp đồng thật).
+  const zones: [string, number, number][] = [['NOI_TINH', 1, 0], ['NOI_MIEN', 2, 1], ['LIEN_MIEN', 3, 2], ['QUOC_TE', 10, 3]];
+  const carriers: [string, number][] = [['GHN', 1.1], ['GHTK', 1.0], ['J&T', 1.05]];
+  for (const [carrier, k] of carriers) for (const [zone, days, step] of zones) {
+    const base = zone === 'QUOC_TE' ? 450000 : [16500, 22000, 30000][step];
+    await q(`INSERT INTO shipping_rates(carrier, zone, base_fee, base_grams, step_fee, step_grams, days, is_simulated) VALUES ($1,$2,$3,500,$4,500,$5,true)`,
+      [carrier, zone, Math.round(base * k / 500) * 500, zone === 'QUOC_TE' ? 120000 : Math.round(5000 * k / 500) * 500, days + (carrier === 'GHTK' ? 1 : 0)]);
+  }
+
   const ceo = await one('SELECT id FROM users WHERE role=$1', ['CEO']);
   await q(`INSERT INTO price_comparisons(product_id, platform, price, qty_basis, source_url, checked_by) VALUES
     ($1,'Sàn A (ví dụ giả lập)',59000,1,'https://example.com/gia-lap',$3),
@@ -122,6 +134,12 @@ async function main() {
     await q(`INSERT INTO working_capital(month, tong_dt, von_luu_dong_30, du_phong_15, tong_von_can_45, ln_rong, vong_quay_von, bien_an_toan, status, is_simulated)
       VALUES ($1,$2,$3,$4,$5,$6,3.33,$7,$8,true)`,
       [i + 1, rev, Math.round(rev * 0.3), Math.round(rev * 0.15), Math.round(rev * 0.45), Math.round(ln * 1e6), bien, bien >= 20 ? 'SAFE' : 'WARNING']);
+  }
+
+  // Chiến dịch quảng cáo giả lập 5 ngày: ROAS thấp để thấy RYN-SALES tự tạm dừng.
+  const camp = await one(`INSERT INTO ad_campaigns(platform, name, product_id, daily_budget, roas_target, is_simulated) VALUES ('TIKTOK','Capybara bóp nổi - test (giả lập)',$1,1000000,2.5,true) RETURNING id`, [pid['CAPY-01']]);
+  for (let i = 1; i <= 5; i++) {
+    await q(`INSERT INTO ad_stats(campaign_id, day, spend, impressions, clicks, orders, revenue) VALUES ($1, CURRENT_DATE - $2::int, 1000000, 40000, 1400, 4, 1500000)`, [camp.id, i]);
   }
 
   // Vài đơn mẫu để có dữ liệu xem thử.

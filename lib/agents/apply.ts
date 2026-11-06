@@ -48,6 +48,16 @@ export async function applyAction(c: PoolClient, a: ActionRow): Promise<string> 
     case 'TRANSLATE':
       await c.query(`UPDATE products SET name_i18n=$2, updated_at=now() WHERE id=$1`, [d.product_id, JSON.stringify(d.names)]);
       return 'Đã lưu tên 7 ngôn ngữ.';
+    case 'AD_STATUS': {
+      const r = await c.query('UPDATE ad_campaigns SET status=$3 WHERE id=$1 AND status=$2', [d.campaign_id, d.from, d.to]);
+      if (!r.rowCount) throw new UserError('Trạng thái chiến dịch đã đổi sau khi AI đề xuất.');
+      return d.to === 'TAM_DUNG' ? 'Đã tạm dừng chiến dịch. Nhớ tắt trên nền tảng quảng cáo (chưa có API).' : 'Đã đổi trạng thái chiến dịch.';
+    }
+    case 'AD_BUDGET': {
+      const r = await c.query('UPDATE ad_campaigns SET daily_budget=$3 WHERE id=$1 AND daily_budget=$2', [d.campaign_id, d.from, d.to]);
+      if (!r.rowCount) throw new UserError('Ngân sách chiến dịch đã đổi sau khi AI đề xuất.');
+      return 'Đã tăng ngân sách/ngày. Nhớ cập nhật trên nền tảng quảng cáo (chưa có API).';
+    }
     case 'SOURCING_CHOICE':
       return chooseOfferTx(c, d.request_id, d.offer_id, null);
     case 'EXTERNAL': // việc n8n gửi vào QAC: chỉ ghi nhận quyết định, n8n hỏi lại trạng thái để chạy tiếp

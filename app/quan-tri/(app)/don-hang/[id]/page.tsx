@@ -4,6 +4,7 @@ import { q, one } from '@/lib/db';
 import { isUuid } from '@/lib/catalog';
 import { markPaid, shipOrder, markDelivered, releaseEscrow, refundOrder, cancelOrder, setShipFee } from '@/lib/orders';
 import { countryName } from '@/lib/countries';
+import { cheapest, guessZone } from '@/lib/logistics';
 import { vnd, pct, dt, label } from '@/lib/format';
 import { runAction } from '@/lib/action';
 import Flash from '@/components/Flash';
@@ -38,6 +39,10 @@ export default async function OrderDetail({ params, searchParams }: { params: { 
     JOIN sales_channels ch ON ch.id=o.channel_id JOIN customers cu ON cu.id=o.customer_id WHERE o.id=$1`, [params.id]);
   if (!o) notFound();
   const items = await q('SELECT * FROM order_items WHERE order_id=$1', [o.id]);
+  // RYN-LOGI: hãng rẻ nhất theo vùng và khối lượng.
+  const grams = (await one('SELECT COALESCE(sum(i.quantity * p.weight_grams),0)::bigint AS g FROM order_items i JOIN products p ON p.id=i.product_id WHERE i.order_id=$1', [o.id])).g;
+  const carriers = cheapest(await q('SELECT * FROM shipping_rates WHERE active'), guessZone(o.ship_address, o.ship_country), Number(grams));
+  const carrierNames = [...new Set(['GHN', 'GHTK', 'J&T', ...carriers.map((x) => x.carrier), 'Khác'])];
   const approvals = await q('SELECT * FROM approvals WHERE order_id=$1 ORDER BY decided_at', [o.id]);
   const H = ({ op, children }: { op: string; children: React.ReactNode }) => (<><input type="hidden" name="id" value={o.id} /><input type="hidden" name="op" value={op} />{children}</>);
   return (
@@ -94,7 +99,8 @@ export default async function OrderDetail({ params, searchParams }: { params: { 
         )}
         {o.status === 'DANG_CHUAN_BI' && can(u, 'orders.fulfil') && (
           <form action={act} className="form-grid"><H op="ship">
-            <label className="field">Hãng vận chuyển<select name="carrier"><option>GHN</option><option>GHTK</option><option>J&amp;T</option><option>Khác</option></select></label>
+            <label className="field">Hãng vận chuyển<select name="carrier" defaultValue={carriers[0]?.carrier ?? 'GHN'}>{carrierNames.map((c) => <option key={c}>{c}</option>)}</select>
+              {carriers[0] && <span className="small muted">AI chọn {carriers[0].carrier} {vnd(carriers[0].fee)} ({(Number(grams) / 1000).toLocaleString('vi-VN')} kg){carriers.length > 1 ? ` · ${carriers.slice(1).map((x) => `${x.carrier} ${vnd(x.fee)}`).join(' · ')}` : ''}</span>}</label>
             <label className="field">Mã vận đơn<input name="tracking" required /></label>
             <label className="field">Hình thức<select name="wfs"><option value="DROPSHIP">Giao thẳng từ xưởng</option><option value="WFS_FULFILLMENT">Kho taomua</option><option value="SAME_DAY_30MIN">Giao 30 phút (HCM)</option></select></label>
             <div style={{ alignSelf: 'end' }}><button className="btn">Gửi hàng</button></div>

@@ -28,6 +28,8 @@ export const PERMS = {
   'payout.controls': ['CEO'],
   'agents.run': ['CEO', 'TRUONG_NHOM'],
   'sourcing.choose': ['CEO'], // AI đề xuất xưởng, CEO quyết định
+  'marketing.edit': ['CEO', 'TRUONG_NHOM', 'NHAN_VIEN'],
+  'logistics.edit': ['CEO', 'TRUONG_NHOM'],
   'payout.pay': ['CEO', 'KE_TOAN'],
   'audit.view': ['CEO', 'KE_TOAN'],
   'users.manage': ['CEO'],

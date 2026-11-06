@@ -44,6 +44,9 @@ export default async function Complaints({ searchParams }: { searchParams: { ok?
       count(*) FILTER (WHERE severity='CAO' AND status NOT IN ('DA_SUA','KHONG_PHAI_LOI'))::int AS cao,
       round(avg(extract(epoch FROM updated_at - created_at)/3600) FILTER (WHERE status='DA_SUA')::numeric, 1) AS gio_xu_ly FROM issue_reports`);
   const s = stat[0];
+  const chat = (await q(`SELECT count(*)::int AS n, count(*) FILTER (WHERE answered_by <> 'CHUYEN_NGUOI')::int AS ai, round(avg(ms))::int AS ms,
+      (SELECT string_agg(intent || ' ' || n, ', ') FROM (SELECT intent, count(*) AS n FROM chat_logs WHERE created_at > now() - interval '7 days' GROUP BY intent ORDER BY n DESC LIMIT 5) x) AS top
+    FROM chat_logs WHERE created_at > now() - interval '7 days'`))[0];
   return (
     <div className="stack">
       <h1>Khủng hoảng & khiếu nại</h1>
@@ -53,6 +56,8 @@ export default async function Complaints({ searchParams }: { searchParams: { ok?
         <span className="badge">Thời gian xử lý TB: {s.gio_xu_ly ?? '—'} giờ (mục tiêu &lt; 2 giờ)</span>
         <Link className="small" href="/quan-tri/loi">Lỗi hệ thống & số đơn thật</Link>
       </div>
+      <div className="card small">CSKH AI 7 ngày: <b>{chat.n}</b> câu hỏi, AI tự trả lời <b>{chat.n ? Math.round((chat.ai / chat.n) * 100) : 0}%</b> (mục tiêu 95%),
+        phản hồi trung bình <b>{chat.ms ?? 0} ms</b> (mục tiêu &lt; 90 giây). Hỏi nhiều nhất: {chat.top ?? '—'}.</div>
       <p className="muted small">AI phân loại khi khách gửi ở /bao-loi. Hoàn tiền dùng nút Hoàn tiền trên trang đơn (tiền đang giữ, Trade Assurance).</p>
       <div className="grid cols-4" style={{ alignItems: 'start' }}>
         {COLUMNS.map(([col, title]) => {

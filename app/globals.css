@@ -129,3 +129,28 @@ footer.site { border-top: 1px solid var(--line); background: #fff; padding: 20px
 .side .side-slogan { color: #ffb36b; font-size: .78rem; font-weight: 600; padding: 0 10px 6px; }
 @media (max-width: 760px) { .side .side-slogan { width: 100%; } }
 .logo-tile.logo-ngang { display: inline-flex; align-items: center; gap: 4px; width: auto; }
+
+/* /shop 9mua bán lẻ kiểu TikTok */
+.retail-feed { height: calc(100vh - 210px); min-height: 480px; overflow-y: auto; scroll-snap-type: y mandatory; border-radius: 16px; max-width: 520px; margin: 0 auto; width: 100%; }
+.retail-card { position: relative; height: calc(100vh - 210px); min-height: 480px; scroll-snap-align: start; display: flex; flex-direction: column; justify-content: flex-end;
+  background: linear-gradient(160deg, #3b1e9a 0%, #0d47a1 55%, #ff6f00 140%); color: #fff; border-radius: 16px; margin-bottom: 12px; overflow: hidden; }
+.retail-emoji { position: absolute; inset: 0 0 40% 0; display: grid; place-items: center; font-size: clamp(6rem, 30vw, 11rem); }
+.retail-hot { position: absolute; top: 14px; left: 14px; }
+.retail-info { position: relative; padding: 18px; background: linear-gradient(transparent, rgba(0,0,0,.55) 30%); }
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
+.sheet { width: 100%; max-width: 520px; border-radius: 18px 18px 0 0; max-height: 90vh; overflow-y: auto; margin: 0; }
+
+/* Chat CSKH AI */
+.chat-fab { position: fixed; right: 16px; bottom: 16px; z-index: 40; display: flex; align-items: center; gap: 6px; background: var(--orange); color: #fff; border: 0;
+  border-radius: 999px; padding: 6px 14px 6px 6px; font-weight: 700; box-shadow: 0 4px 14px rgba(0,0,0,.25); cursor: pointer; }
+.chat-fab img { background: #fff; border-radius: 50%; padding: 2px; }
+.chat-box { position: fixed; right: 16px; bottom: 76px; z-index: 41; width: min(360px, calc(100vw - 32px)); height: min(520px, calc(100vh - 120px)); display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.chat-head { display: flex; align-items: center; gap: 8px; background: var(--blue); color: #fff; padding: 10px 12px; }
+.chat-head img { background: #fff; border-radius: 6px; }
+.chat-x { margin-left: auto; background: none; border: 0; color: #fff; font-size: 1.4rem; cursor: pointer; }
+.chat-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg); }
+.chat-msg { max-width: 85%; padding: 8px 10px; border-radius: 12px; font-size: .9rem; white-space: pre-wrap; }
+.chat-msg.ai { background: #fff; border: 1px solid var(--line); align-self: flex-start; }
+.chat-msg.me { background: var(--blue); color: #fff; align-self: flex-end; }
+.chat-input { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); background: #fff; }
+.chat-input input { flex: 1; }

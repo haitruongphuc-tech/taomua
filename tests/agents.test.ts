@@ -154,3 +154,40 @@ describe('Quick Approve Center', () => {
     await expect(qacDecide('ORDER:not-a-uuid', 'APPROVED', ceoU, { id: ceo.id, label: 'CEO' })).rejects.toThrow(/không hợp lệ/);
   });
 });
+
+describe('bán lẻ 9mua, quảng cáo, CSKH trên database', () => {
+  it('/shop chỉ bán sản phẩm đang bán trên 9mua, 1-9 cái, giá từ máy chủ', async () => {
+    const { quoteRetail } = await import('@/lib/retail');
+    await q("INSERT INTO sales_channels(code,name,kind,connector,fee_pct) VALUES ('9mua','9mua.com','PARTNER_SITE','MANUAL',5) ON CONFLICT (code) DO NOTHING");
+    await q("UPDATE products SET status='DROPSHIP_SI' WHERE id=$1", [cheap.id]);
+    await q("INSERT INTO channel_listings(channel_id, product_id, price, status) SELECT id, $1, 39000, 'NHAP' FROM sales_channels WHERE code='9mua'", [cheap.id]);
+    expect((await quoteRetail([{ id: cheap.id, qty: 1 }])).ok).toBe(false);          // chưa "Đang bán"
+    await q("UPDATE channel_listings SET status='DANG_BAN' WHERE product_id=$1", [cheap.id]);
+    const ok = await quoteRetail([{ id: cheap.id, qty: 2 }]);
+    expect(ok.ok).toBe(true);
+    expect(ok.total).toBe(78000);
+    expect((await quoteRetail([{ id: cheap.id, qty: 10 }])).ok).toBe(false);         // từ 10 cái mua sỉ
+    const o = await createOrder({ channelCode: '9mua', customer: { name: 'Khách lẻ', phone: '0900000099' }, address: 'Q1 TP.HCM', items: [{ productId: cheap.id, quantity: 2 }] }, sys);
+    expect(Number(o.tong_dt)).toBe(78000);
+  });
+
+  it('RYN-SALES tự tạm dừng quảng cáo ROAS < 2', async () => {
+    await q("DELETE FROM payment_controls");
+    const c = await one("INSERT INTO ad_campaigns(platform, name, daily_budget) VALUES ('TIKTOK','Test',1000000) RETURNING id");
+    for (let i = 1; i <= 4; i++) await q('INSERT INTO ad_stats VALUES ($1, CURRENT_DATE - $2::int, 1000000, 40000, 1400, 3, 1200000)', [c.id, i]);
+    await runAgents('LICH', sys, ['RYN-SALES']);
+    expect((await one('SELECT status FROM ad_campaigns WHERE id=$1', [c.id])).status).toBe('TAM_DUNG');
+    expect(await one("SELECT 1 AS x FROM agent_actions WHERE kind='AD_STATUS' AND status='TU_DONG'")).toBeTruthy();
+  });
+
+  it('CSKH AI trả lời giá sỉ và trạng thái đơn bằng dữ liệu thật, đòi số điện thoại khi tra đơn', async () => {
+    const { answer } = await import('@/lib/cskh');
+    const g = await answer('giá sỉ thau rửa bát inox bao nhiêu');
+    expect(g.intent).toBe('GIA');
+    expect(g.reply).toMatch(/10\+/);
+    const o = await one("SELECT code FROM wholesale_orders o JOIN customers c ON c.id=o.customer_id WHERE c.phone='0900000099'");
+    expect((await answer(`đơn ${o.code} tới đâu rồi`)).reply).toMatch(/số điện thoại/);
+    expect((await answer(`đơn ${o.code} tới đâu rồi`, { phone: '0900000099' })).reply).toMatch(new RegExp(o.code));
+    expect((await answer('hàng bị hỏng muốn hoàn tiền')).answeredBy).toBe('CHUYEN_NGUOI');
+  });
+});

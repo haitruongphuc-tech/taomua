@@ -435,3 +435,58 @@ ALTER TABLE issue_reports DROP CONSTRAINT IF EXISTS issue_reports_severity_check
 ALTER TABLE issue_reports ADD CONSTRAINT issue_reports_severity_check CHECK (severity IN ('THAP','VUA','CAO'));
 ALTER TABLE issue_reports DROP CONSTRAINT IF EXISTS issue_reports_resolution_check;
 ALTER TABLE issue_reports ADD CONSTRAINT issue_reports_resolution_check CHECK (resolution IS NULL OR resolution IN ('DOI_HANG','HOAN_TIEN','BOI_THUONG','XIN_LOI','SUA_WEB','KHONG'));
+
+-- ===== CSKH AI 95% (RYN-SALES): nhật ký hội thoại để đo tỉ lệ AI tự trả lời và thời gian phản hồi =====
+CREATE TABLE IF NOT EXISTS chat_logs (
+  id         BIGSERIAL PRIMARY KEY,
+  session    TEXT NOT NULL,
+  message    TEXT NOT NULL,
+  reply      TEXT NOT NULL,
+  intent     TEXT NOT NULL,
+  answered_by TEXT NOT NULL CHECK (answered_by IN ('AI_QUY_TAC','AI_NGON_NGU','CHUYEN_NGUOI')),
+  ms         INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_logs_at ON chat_logs(created_at DESC);
+
+-- ===== Marketing: chiến dịch quảng cáo (TikTok / Facebook / Google Ads). Số liệu nhập tay hoặc CSV cho tới khi có API. =====
+CREATE TABLE IF NOT EXISTS ad_campaigns (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  platform     TEXT NOT NULL CHECK (platform IN ('TIKTOK','FACEBOOK','GOOGLE','ZALO','KHAC')),
+  name         TEXT NOT NULL,
+  product_id   UUID REFERENCES products(id) ON DELETE SET NULL,
+  status       TEXT NOT NULL DEFAULT 'DANG_CHAY' CHECK (status IN ('DANG_CHAY','TAM_DUNG','KET_THUC')),
+  daily_budget BIGINT NOT NULL CHECK (daily_budget > 0),
+  roas_target  NUMERIC(6,2) NOT NULL DEFAULT 2,
+  is_simulated BOOLEAN NOT NULL DEFAULT FALSE,
+  created_by   UUID REFERENCES users(id),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ad_stats (
+  campaign_id  UUID NOT NULL REFERENCES ad_campaigns(id) ON DELETE CASCADE,
+  day          DATE NOT NULL,
+  spend        BIGINT NOT NULL DEFAULT 0 CHECK (spend >= 0),
+  impressions  INT NOT NULL DEFAULT 0 CHECK (impressions >= 0),
+  clicks       INT NOT NULL DEFAULT 0 CHECK (clicks >= 0),
+  orders       INT NOT NULL DEFAULT 0 CHECK (orders >= 0),
+  revenue      BIGINT NOT NULL DEFAULT 0 CHECK (revenue >= 0),
+  PRIMARY KEY (campaign_id, day)
+);
+
+-- ===== Logistics: bảng giá hãng vận chuyển (GHN / GHTK / J&T...) để AI chọn hãng rẻ nhất. Nhập tay cho tới khi có API. =====
+ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_grams INT NOT NULL DEFAULT 300 CHECK (weight_grams > 0);
+CREATE TABLE IF NOT EXISTS shipping_rates (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  carrier      TEXT NOT NULL,
+  zone         TEXT NOT NULL CHECK (zone IN ('NOI_TINH','NOI_MIEN','LIEN_MIEN','QUOC_TE')),
+  base_fee     BIGINT NOT NULL CHECK (base_fee >= 0),      -- phí cho phần khối lượng cơ bản
+  base_grams   INT NOT NULL DEFAULT 500 CHECK (base_grams > 0),
+  step_fee     BIGINT NOT NULL DEFAULT 0 CHECK (step_fee >= 0), -- mỗi bước khối lượng thêm
+  step_grams   INT NOT NULL DEFAULT 500 CHECK (step_grams > 0),
+  days         INT,
+  active       BOOLEAN NOT NULL DEFAULT TRUE,
+  is_simulated BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (carrier, zone)
+);
+ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS ship_zone TEXT;

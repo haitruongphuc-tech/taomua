@@ -274,3 +274,58 @@ describe('slogan theo trang', async () => {
     expect(sloganFor('/truy-xuat/AO-3D')).toBe(SLOGANS.vui);
   });
 });
+
+describe('marketing, logistics, CSKH', async () => {
+  const M = await import('@/lib/marketing');
+  const L = await import('@/lib/logistics');
+  const C = await import('@/lib/cskh');
+  const t = (o: Partial<{ days: number; spend: number; impressions: number; clicks: number; orders: number; revenue: number }>) =>
+    ({ days: 5, spend: 1e6, impressions: 50000, clicks: 1500, orders: 10, revenue: 3e6, ...o });
+  it('quảng cáo: ROAS < 2 hoặc CTR < 2% dừng; CTR > 3% và ROAS đạt thì tăng; ít số liệu thì giữ', () => {
+    expect(M.adDecision(t({ revenue: 1.5e6 })).action).toBe('STOP');
+    expect(M.adDecision(t({ clicks: 500 })).action).toBe('STOP');
+    expect(M.adDecision(t({ clicks: 2000 }), 2.5).action).toBe('SCALE');
+    expect(M.adDecision(t({ clicks: 1250 })).action).toBeNull();
+    expect(M.adDecision(t({ days: 2, revenue: 0 })).action).toBeNull();
+    expect(M.adMetrics(t({})).roas).toBe(3);
+  });
+  it('CSV số liệu quảng cáo', () => {
+    const r = M.parseAdCsv('ngay,chi_phi,hien_thi,click,don,doanh_thu\n05/11/2026,1.000.000,40000,1400,4,1500000\n2026-11-04,x,1,1,1,1');
+    expect(r.rows).toEqual([{ day: '2026-11-05', spend: 1e6, impressions: 40000, clicks: 1400, orders: 4, revenue: 1.5e6 }]);
+    expect(r.errors.length).toBe(1);
+  });
+  it('vận chuyển: tính phí theo bước khối lượng, chọn hãng rẻ nhất, đoán vùng', () => {
+    const rates = [
+      { carrier: 'GHN', zone: 'LIEN_MIEN', base_fee: 33000, base_grams: 500, step_fee: 5500, step_grams: 500, days: 3 },
+      { carrier: 'GHTK', zone: 'LIEN_MIEN', base_fee: 30000, base_grams: 500, step_fee: 5000, step_grams: 500, days: 4 },
+      { carrier: 'J&T', zone: 'NOI_TINH', base_fee: 15000, base_grams: 500, step_fee: 5000, step_grams: 500, days: 1 },
+    ];
+    expect(L.rateFee(rates[1], 1200)).toBe(30000 + 2 * 5000);
+    expect(L.cheapest(rates, 'LIEN_MIEN', 2000)[0].carrier).toBe('GHTK');
+    expect(L.guessZone('12 Lê Lợi, Quận 1, TP.HCM')).toBe('NOI_TINH');
+    expect(L.guessZone('Thủ Dầu Một, Bình Dương')).toBe('NOI_MIEN');
+    expect(L.guessZone('Cầu Giấy, Hà Nội')).toBe('LIEN_MIEN');
+    expect(L.guessZone('Tokyo', 'JP')).toBe('QUOC_TE');
+  });
+  it('CSKH AI phân loại câu hỏi', () => {
+    expect(C.detectIntent('Áo thun 3D giá sỉ bao nhiêu?')).toBe('GIA');
+    expect(C.detectIntent('đơn TM1002 của tôi tới đâu rồi')).toBe('DON_HANG');
+    expect(C.detectIntent('hàng bị hỏng, muốn hoàn tiền')).toBe('KHIEU_NAI');
+    expect(C.detectIntent('xuất hóa đơn VAT được không')).toBe('HOA_DON');
+    expect(C.detectIntent('chuyển khoản vào đâu')).toBe('THANH_TOAN');
+    expect(C.detectIntent('giao hàng mấy ngày')).toBe('VAN_CHUYEN');
+    expect(C.detectIntent('cho gặp nhân viên')).toBe('NGUOI_THAT');
+    expect(C.detectIntent('xin chào')).toBe('CHAO');
+  });
+});
+
+describe('CSKH so khớp sản phẩm khi chat', async () => {
+  const { chatMatch } = await import('@/lib/cskh');
+  const ps = [{ name: 'Áo thun in 3D form rộng' }, { name: 'Thau rửa bát inox 304' }, { name: 'Bình giữ nhiệt 500 ml' }];
+  it('hiểu cách viết tắt, không đoán bừa', () => {
+    expect(chatMatch('gia si ao thun 3D bao nhieu', ps)?.name).toBe('Áo thun in 3D form rộng');
+    expect(chatMatch('bình giữ nhiệt 500ml giá sao', ps)?.name).toBe('Bình giữ nhiệt 500 ml');
+    expect(chatMatch('giá sỉ bao nhiêu', ps)).toBeNull();
+    expect(chatMatch('máy xay sinh tố', ps)).toBeNull();
+  });
+});

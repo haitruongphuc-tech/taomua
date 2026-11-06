@@ -16,6 +16,7 @@ async function doLogout() {
 const MENU: { grp: string; items: [string, string, Perm?][] }[] = [
   { grp: 'Điều hành', items: [['/quan-tri/duyet-nhanh', '⚡ Duyệt nhanh'], ['/quan-tri', 'Tổng quan'], ['/quan-tri/duyet', 'Chờ duyệt'], ['/quan-tri/don-hang', 'Đơn hàng']] },
   { grp: 'Hàng hóa', items: [['/quan-tri/san-pham', 'Sản phẩm'], ['/quan-tri/xuong', 'Xưởng'], ['/quan-tri/tim-xuong', 'Tìm xưởng (AI)'], ['/quan-tri/kenh-ban', 'Kênh bán'], ['/quan-tri/bao-gia', 'Yêu cầu báo giá']] },
+  { grp: 'Kinh doanh', items: [['/quan-tri/marketing', 'Marketing & quảng cáo'], ['/quan-tri/logistics', 'Logistics & vận chuyển']] },
   { grp: 'Tài chính', items: [['/quan-tri/von', 'Vốn & dự toán', 'finance.view'], ['/quan-tri/doi-soat', 'Đối soát sao kê', 'reconcile.run'], ['/quan-tri/chi-tien', 'Chi tiền'], ['/quan-tri/kiem-soat-chi', 'Kiểm soát chi'], ['/quan-tri/ke-toan', 'Kế toán & thuế', 'finance.view']] },
   { grp: 'Hệ thống', items: [['/quan-tri/ai', 'AI tự động'], ['/quan-tri/can-nhap', 'Thông tin cần nhập'], ['/quan-tri/khieu-nai', 'Khiếu nại (Kanban)'], ['/quan-tri/loi', 'Lỗi & đơn thật'], ['/quan-tri/nhat-ky', 'Nhật ký', 'audit.view'], ['/quan-tri/nguoi-dung', 'Người dùng', 'users.manage'], ['/quan-tri/tai-khoan', 'Đổi mật khẩu']] },
 ];

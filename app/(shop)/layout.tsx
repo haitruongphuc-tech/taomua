@@ -4,6 +4,7 @@ import { LEGAL } from '@/lib/legal';
 import { one } from '@/lib/db';
 import Logo from '@/components/Logo';
 import SloganBar from '@/components/Slogan';
+import ChatWidget from '@/components/ChatWidget';
 import { SLOGANS } from '@/lib/slogans';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
             <button className="btn" type="submit">Tìm</button>
           </form>
           <nav className="nav">
+            <Link href="/shop">9mua mua lẻ</Link>
             <Link href="/bao-gia">Yêu cầu báo giá</Link>
             <Link href="/don-hang">Tra cứu đơn</Link>
             <CartBadge />
@@ -39,6 +41,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
           <div><Link href="/bao-loi">Báo lỗi / Report a problem</Link> · <Link href="/don-hang">Tra cứu đơn / Track order</Link></div>
         </div>
       </footer>
+      <ChatWidget />
     </>
   );
 }
