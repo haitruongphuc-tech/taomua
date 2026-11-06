@@ -26,7 +26,7 @@ Tài khoản seed: `ceo@`, `truongnhom@`, `ketoan@`, `nhanvien@taomua.local`. Đ
 | Phần | Đường dẫn |
 |---|---|
 | Cửa hàng sỉ | `/`, `/san-pham/[id]`, `/gio-hang`, `/don-hang` (tra cứu bằng mã đơn + SĐT), `/bao-gia` (RFQ) |
-| Quản trị | `/quan-tri` — tổng quan, chờ duyệt, đơn hàng, sản phẩm, xưởng, kênh bán, nhập đơn từ kênh, báo giá, vốn, đối soát, chi tiền, dịch vụ AI, nhật ký, người dùng |
+| Quản trị | `/quan-tri` — tổng quan, chờ duyệt, đơn hàng, sản phẩm, xưởng, kênh bán, nhập đơn từ kênh, báo giá, vốn, đối soát, chi tiền, kiểm soát chi, dịch vụ AI, nhật ký, người dùng |
 | API theo spec | `/api/v1/...` (14 endpoint, xem *Quản trị → Dịch vụ AI*) |
 | Logic | `lib/pricing.ts` (biên), `lib/approval.ts` (cấp duyệt), `lib/orders.ts` (vòng đời đơn, giữ tiền), `lib/channels.ts` (kênh bán), `lib/reconcile.ts` (đối soát) |
 | Lược đồ | `db/schema.sql` |
@@ -47,6 +47,10 @@ Biên / chi phí = LN ròng ÷ Chi phí thực
 **Duyệt đơn** theo giá trị đơn: dưới 5 triệu Cấp 1 (tự duyệt) · 5–20 triệu Cấp 2 (trưởng nhóm, 30 phút) · 20–50 triệu Cấp 3 (CEO, 5 phút) · 50–200 triệu Cấp 4 (CEO, 2 giờ) · trên 200 triệu Cấp 5 (CEO, 24 giờ).
 Mức sàn: biên dưới 15% → tối thiểu Cấp 2; đơn lỗ → tối thiểu Cấp 4. Biên sỉ trên 150% chỉ cảnh báo, không chặn.
 
+**Chi tiền** (`lib/payouts.ts`, theo `docs/PAYMENT_MANAGEMENT_AI_CEO_200D.md`): cùng ngưỡng cấp như duyệt đơn. Dưới 5 triệu tự duyệt (trừ loại "Khác") · 5–20 triệu trưởng nhóm hoặc CEO, không tự duyệt khoản mình đề xuất · từ 20 triệu chỉ CEO · từ 10 triệu người duyệt nhập lại mật khẩu. Hệ thống không tự chuyển tiền: kế toán chuyển khoản rồi ghi mã giao dịch.
+
+**Kiểm soát chi** (`/quan-tri/kiem-soat-chi`, CEO đổi): nút tổng tắt thì mọi đơn và khoản chi Cấp 1 cần người duyệt · 6 nút khóa từng loại chi · nút khóa nhập hàng mới (chặn đặt cọc xưởng và mua mẫu) · Trade Assurance luôn bật. Mỗi lần đổi ghi nhật ký.
+
 **Giữ tiền**: tiền khách chuyển được giữ đến khi khách xác nhận đã nhận hàng, hoặc CEO xác nhận. CEO có thể hoàn tiền từ khoản đang giữ.
 
 **Kênh bán**: taomua.com là kênh riêng. Mọi nền tảng khác là một dòng trong `sales_channels` với phí sàn riêng. Chưa kênh nào có API: đơn được nhập tay hoặc bằng CSV, sản phẩm xuất CSV để đăng thủ công. Khi có API, viết một `ChannelConnector` trong `lib/channels.ts`.
@@ -59,6 +63,7 @@ Mức sàn: biên dưới 15% → tối thiểu Cấp 2; đơn lỗ → tối th
 - Tài khoản nhận tiền và API ngân hàng (hiện đối soát bằng sao kê CSV; hệ thống không tự chuyển tiền).
 - Danh sách nền tảng cần kết nối API và quyền truy cập của từng nền tảng; phí sàn thật.
 - Danh sách 19 yếu tố TrustScore và trọng số (đang tạm tính 5 yếu tố).
+- Xác thực 2 lớp cho khoản chi lớn và cách nhà đầu tư cùng duyệt Cấp 5 (spec yêu cầu, chưa làm).
 - Bot Telegram thật và chat id người duyệt (đã có code gửi và webhook, chưa thử với bot thật).
 - Máy chủ, tên miền, sao lưu database.
 - Kế toán xác nhận cách ghi nhận tiền đang giữ và VAT đầu vào; luật sư xem điều khoản giữ tiền và bảng so sánh giá.

@@ -1,0 +1,123 @@
+[PDF page 1 image attached. Read this image directly to extract content.]
+
+BAO CAO KHAO SAT NEN TANG AMAZON, WALMART, ALIBABA, EBAY, SHOPIFY
+CONG NGHE, GIAO DIEN, TINH NANG, TIEN ICH, KY THUAT TMDT
+DE XUAT TAOMUA.COM HAP DAN NGUOI MUA HANG - 95-98% AI - MST 0316437942
+Nguon: Tim kiem web 11/2026 - Amazon Accelerate 2026, Walmart Marketplace 2026, Alibaba Accio 2026, eBay 2026, Shopify Fall
+26 Exponential
+I. AMAZON 2026 - RUFUS AI + AUTONOMOUS SHOPPING
+Cong nghe: Rufus AI shopping assistant 115% MAU growth, 400% engagement YoY, primary interface mobile. Seller Assistant
+persistent memory learns business, watches 24/7, runs workflows auto. Buy For Me autonomous purchasing agent full access
+purchase history, delivery preferences, payment credentials, extends beyond Amazon catalog tens of millions products. AWS
+Bedrock + Trainium + Inferentia chip. Product Opportunity Explorer proactive AI analyze search/click/purchase. Price history
+tracker 365 days, Auto-Buy execute purchases automatic when hit set price. Global Seller Central fully rolled out end
+2026.1032860993721333227†L41-L49 Giao dien: Mobile-first, Rufus primary, larger images, modern layout, streamlined
+navigation, Shopping View consolidated delivery options, interactive price filters. Tinh nang hap dan: Conversational product
+queries, complex comparison, auto-buy, price history, proactive opportunity explorer. Seller Assistant remembers business. Ap
+dung taomua.com: Tao AI Shopping Assistant nhu Rufus: Khach si nhap "tim ao thun hot trend gia duoi 50k bien rong 40%" -> AI tu
+tim 50 xuong, so sanh, tinh bien rong 15-150% tren chi phi, de xuat gia si. Them Price history 365 days cho sp taomua.com,
+Auto-Buy khi gia xuong duoi muc dat. Seller Assistant taomua.com nho khach si hay mua gi, tu de xuat trend moi.
+II. WALMART MARKETPLACE 2026 - SPARKY + AGENT GATEWAY + SAME-DAY 30MIN
+Cong nghe: Sparky AI shopping agent image upload -> shopping list, recipes + ingredients + healthier alternatives, voice
+capabilities end 20268377966091504598113†L96-L103. Agent Gateway framework allows autonomous AI shopping agents
+interface directly catalog, built on Model Context Protocol (Anthropic)8377966091504598113†L59-L64, read inventory and
+perform transactions without manual sensitive info. Agent Profiles enable shoppers authorize individual AI agents, track purchases
+separately, set spending limit $50/$100/$200 or require approval per transaction8377966091504598113†L51-L54. Store-based
+fulfillment local inventory, Same-day, Express 30min in select markets8377966091504598113†L7-L12. Scintilla platform
+commerce intelligence first-party data + AI identify performance changes. Shop to Light: customers use app ask help find item and
+store system responds. Instant checkout in Gemini chat linked Walmart account8377966091504598113†L71-L75. Giao dien:
+Clean white space, Virtual Garage fitment helps find exact parts for vehicle8377966091504598113†L80-L83, Better Care
+Services healthcare marketplace 900 products. Tinh nang hap dan: Application-gated, no monthly subscription, category referral
+fee, New-Seller Savings 20-40% GMV Feb 2026-Jan 2027, WFS (Fulfilled by Walmart) 50% GMV growth tag
+two-day-or-less8377966091504598113†L34-L39. Ap dung taomua.com: Hoc Agent Gateway: Cho phep
+ChatGPT/Claude/Gemini/9mua.com AI agent mua si tu taomua.com qua Model Context Protocol. Tao Agent Profiles cho khach si:
+Dat han muc 10tr/50tr/100tr, yeu cau duyet moi don >50tr. Hoc WFS: Tao WFS taomua.com - Fulfillment cho khach si TikTok, kho
+100m2 Binh Thanh chi chua mau, dropship si, tang 50% GMV. Hoc Sparky: Image upload -> shopping list (khach up anh ao thun ->
+AI tim xuong giong), voice search. Instant checkout trong 9mua.com chat.
+III. ALIBABA.COM B2B 2026 - ACCIO AI + TRUSTSCORE + TRADE ASSURANCE 3.0
+Cong nghe: Accio AI Platform official Malaysian launch, agentic AI automate workflows connected e-commerce platforms without
+programming743979026703115904†L57-L62. Tongyi Data Mesh processes 12.4 exabytes cross-border trade signals
+daily743979026703115904†L10-L12. MatchPro RFQ-to-order reduce time 63%, supplier density 22M
+manufacturers743979026703115904†L116-L120. TrustScore ranking system weighs verified certifications and response latency
+2x heavily as keyword density, 17 weighted factors - response time under 90s weighted 18%743979026703115904†L72-L79.
+Trade Assurance 3.0 requires real-time inventory sync and digital proof production capacity743979026703115904†L72-L76.
+Logistics integration North American market, supply chain resilience program identify disruptions before
+impact743979026703115904†L18-L22. Automates Incoterms negotiation, duty calculation, doc generation cutting onboarding
+weeks to under 48 hours743979026703115904†L37-L41. 1688.com B2B wholesale reduces product dev cycle 40% via
+pre-vetted MOQ-flexible suppliers + integrated quality inspection APIs743979026703115904†L36-L39. Giao dien: Streamlined
+RFQ, verified badges, detailed supplier info, seamless communication, robust transaction security, enhanced AI-driven search,
+improved logistics tracking. Ap dung taomua.com: Hoc Accio: Dung Accio AI cho market research, product planning, supplier
+sourcing, business dev. Hoc TrustScore: Tao TrustScore taomua.com 0-100: phan hoi <90s 18%, chung chi xuong, ty le loi <2%,
+giao dung han, ton kho ao sync real-time. Hien thi tren taomua.com cho khach si chon. Hoc Trade Assurance: Tao Trade Assurance
+taomua.com - Giu tien den khi khach si nhan hang, hoan tien neu loi. Hoc 1688: Moi sp co 3 xuong du phong, MOQ-flexible, quality
+inspection APIs RynnBrain camera 98%. Hoc supply chain resilience: AI du bao dut gay chuoi cung ung.
+IV. EBAY 2026 - AI-DRIVEN SEARCH + MAGICAL LISTING + LIVE SOCIAL SHOPPING
+Cong nghe: AI-driven search understands natural language conversational, image-based search upgrade upload photos identify
+similar products7810967655941393962†L6-L11. Magical Listing Tool built on Azure OpenAI verified adoption
+numbers7810967655941393962†L54-L57, AI-generated product photo backgrounds and barcode-scan-to-list auto-populates
+listing fields7810967655941393962†L55-L59. AI assistant messaging, cost tracking, messaging updates at OPEN25 Las Vegas
+Aug 12-147810967655941393962†L25-L32. Enhanced mobile experiences, AI-powered listing tools, personalized
+communications, streamlined C2C managed shipping, eBay Live social shopping driving
+engagement7810967655941393962†L63-L66. Smarter search personalized recommendations, AI-powered seller tools
+streamline listing. Giao dien: Rebrand clean lines white space, sharper fresh logo7810967655941393962†L20-L22, Shopping
+View larger high-res images, modernized layout, streamlined navigation, consolidated delivery options, interactive price
+filters7810967655941393962†L35-L40, intuitive though volume overwhelming. Ap dung taomua.com: Hoc conversational
+search: Khach si nhap tu nhien "tim do choi tre em hot thang nay gia duoi 100k" -> AI hieu. Hoc image search: Up anh sp -> AI tim
+xuong giong. Hoc Magical Listing: Tu tao mo ta sp bang Azure OpenAI, tu tao background anh sp. Hoc eBay Live: Tao Live shopping
+tren taomua.com cho khach si xem RynnBrain camera check mau live, dat si ngay trong live.
+
+[PDF page 2 image attached. Read this image directly to extract content.]
+
+V. SHOPIFY FALL 26 EXPONENTIAL - AGENTIC COMMERCE + CANVAS + HORIZON
+Cong nghe: Fall 26 Edition Exponential Oct 28 2026 150+ updates7191527487137103396†L5-L8, agentic commerce center:
+Shopify Connectors for AI agents lets merchants connect Shopify with AI agents manage
+products/inventory/orders7191527487137103396†L8-L11, 9 agents: ChatGPT, Claude, Claude Duet, Microsoft Copilot, Google
+Gemini, Grok, Grok Bot, Muse, Perplexity7191527487137103396†L17-L20. Agentic commerce biggest share, shop.md and Shop
+Pay checkout inside personal AI agents like Meta's Muse and Claude Duet7191527487137103396†L23-L26. Every Liquid and
+Hydrogen storefront now exposes WebMCP tools, browser agents can search/add to
+cart/checkout7191527487137103396†L26-L29. Sidekick AI assistant admin rebuilt write code apply multi-step
+changes7191527487137103396†L28-L31. Canvas visual environment creating/editing themes view store templates together
+edit elements or describe change to Sidekick modify theme7191527487137103396†L62-L65, early-access. Horizon design
+system replaces older theme editor focus speed in-canvas editing7191527487137103396†L33-L36. shop.md turns any AI agent
+into personal shopper search 1B products checkout Shop Pay7191527487137103396†L74-L77, Canvas changes how stores get
+designed whole store on one canvas edit by talking to Sidekick7191527487137103396†L77-L80. Shop.dev single connection
+Shopify Catalog/sign-in/cart/checkout/Shop Pay7191527487137103396†L53-L56. Hydrogen rebuilt generally available any
+framework/runtime customer accounts predictive search Vue bindings edge caching agent
+skills7191527487137103396†L56-L59. 7 new local payment methods Alipay/WeChat Pay/MB
+WAY/OXXO/Satispay/Scalapay/GrabPay7191527487137103396†L15-L18, Shopify Protect fraud prevention, expanded in-store
+customer recognition. Giao dien: Horizon design system speed, Canvas whole store view edit by talking to Sidekick, in-canvas
+editing. Ap dung taomua.com: Hoc Agentic commerce: Tao shop.md cho taomua.com - skill file dua cho ChatGPT/Claude/Gemini de
+AI agent co the tim sp si tren taomua.com va checkout bang 9PAY. Tao Connectors 9 agents nhu Shopify. Hoc Canvas: Tao giao
+dien taomua.com nhu Canvas - Xem toan bo gian hang B2B tren 1 canvas, sua bang noi voi Sidekick taomua AI. Hoc Horizon: Toc
+do nhanh, in-canvas editing. Hoc Hydrogen: Dung framework toc do cao. Hoc Shop Pay: 9PAY 1-click checkout.
+VI. DE XUAT TAOMUA.COM HAP DAN NGUOI MUA - KET HOP TINH HOA 5 NEN TANG - 95-98%
+AI
+Cong nghe de xuat (ket hop tinh hoa): 1. AI Shopping Assistant (hoc Amazon Rufus + Walmart Sparky + Alibaba Accio): Khach si
+nhap tu nhien, up anh, voice -> AI tu tim 50 xuong, so sanh, tinh bien rong 15-150%, de xuat gia si, tu tao video TikTok, tu chay
+Ads. Dung Qwen3.7-Max + RynnBrain + Accio. 2. Agent Gateway (hoc Walmart Agent Gateway + Shopify Connectors): Cho phep
+ChatGPT/Claude/Gemini/9mua.com AI agent mua si tu taomua.com qua UCP/MCP/AP2 (Model Context Protocol). Agent Profiles cho
+khach si dat han muc 10tr/50tr/100tr, yeu cau duyet >50tr. Day la xu huong 2026 - Agentic commerce. 3. TrustScore taomua (hoc
+Alibaba TrustScore 17 factors): Diem xuong 0-100: phan hoi <90s 18%, chung chi, ty le loi <2%, giao dung han, inventory sync
+real-time. Hien thi tren taomua.com. Bao hiem don hang 100% Trade Assurance taomua.com. 4. WFS taomua (hoc Walmart WFS +
+Amazon FBA + Alibaba Cainiao): Fulfillment cho khach si TikTok, kho 100m2 Binh Thanh chi chua mau, con lai dropship si, tracking
+real-time, Same-day 30min HCM, tang 50% GMV. 5. Canvas UI + Horizon (hoc Shopify Canvas + Horizon): Giao dien taomua.com:
+Xem toan bo gian hang B2B tren 1 canvas, sua bang noi voi Sidekick taomua AI, toc do nhanh, mobile-first 95%. Bang gia 4 muc
+(10/50/100/500) linh dong, bien rong 15-150% hien ro LN rong sau thue. 6. Price history + Auto-Buy (hoc Amazon): Lich su gia 365
+days, Auto-Buy khi gia xuong duoi muc dat. 7. Magical Listing + eBay Live (hoc eBay): Tu tao mo ta sp Azure OpenAI, background
+anh sp, Live shopping RynnBrain camera check mau live. Giao dien de xuat hap dan: - taomua.com B2B: Mau xanh duong tin cay +
+cam hanh dong, bang gia 4 muc linh dong, TrustScore xuong, RynnBrain camera live, LATR test CTR realtime, vong quay von >3
+lan dashboard, Telegram duyet don <5p, RFQ, Trade Assurance. - 9mua.com B2C: TikTok style video feed san pham, Shop Pay
+1-click, Alipay/WeChat Pay/VNPay/Momo, Shop to Light AR. Tinh nang de xuat hap dan: - RFQ: Khach si dang yeu cau bao gia, AI tu
+tim xuong, bao gia trong 2 phut. - Trade Assurance taomua: Giu tien den khi nhan hang, hoan tien neu loi, tang tin cay. - Scintilla
+taomua: Phan tich hieu suat ban si, de xuat trend moi, tang truong 50-100%. - Instant checkout trong Gemini/ChatGPT: Khach chat
+voi AI "tim ao thun hot trend" -> AI tim tren taomua.com -> checkout ngay trong chat. - Shop.md taomua: Skill file cho AI agent
+mua si. Lo trinh ky thuat 5 giai doan (12 thang): Giai doan 1 (Thang 1-2): N8N 7 Agent + UCP/MCP - Trend Hunter + Supplier Brain
++ Pricing Engine bien rong 15-150% - Hoc Alibaba Accio + Amazon Rufus - 15tr. Giai doan 2 (Thang 2-3): Agent Gateway +
+TrustScore - RFQ + Trade Assurance + Agent Profiles - Hoc Walmart + Alibaba - 10tr. Giai doan 3 (Thang 3-4): AI Shopping
+Assistant + Canvas UI - Voice + Image search, Bang gia 4 muc, RynnBrain 98%, LATR test - Hoc eBay + Shopify + Amazon - 20tr.
+Giai doan 4 (Thang 4-6): shop.md + Agentic Storefronts - Ban si qua ChatGPT/Claude/Gemini, 9mua.com la 1 Agent mua tu
+taomua.com, Instant checkout - Hoc Shopify Fall 26 + Walmart Gemini - 30tr. Giai doan 5 (Thang 6-12): Cainiao-style logistics +
+Protect - WFS taomua fulfillment, Scintilla analytics, Shopify Protect fraud, Vong quay von dashboard - Hoc Alibaba Cainiao +
+Walmart WFS + Shopify Protect - 50tr. Ket luan: Taomua.com se la nen tang B2B dau tien VN ket hop tinh hoa 5 nen tang lon nhat
+the gioi 2026 + 95-98% AI + bien rong 15-150% + TrustScore + Agent Gateway + WFS + Canvas + Trade Assurance + RynnBrain
+98% + LATR + vong quay von >3 lan + Telegram duyet <5p = hap dan nhat cho nguoi mua si, canh tranh nhat, an toan nhat.

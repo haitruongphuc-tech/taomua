@@ -2,7 +2,8 @@ import { MARGIN_FLOOR } from './pricing';
 
 // Cấp duyệt lấy theo giá trị đơn. Biên chỉ đặt mức sàn: biên < 15% → tối thiểu Cấp 2, đơn lỗ → tối thiểu Cấp 4.
 export const LEVELS = {
-  1: { label: 'Cấp 1', approver: 'Tự động', roles: [] as string[], minutes: 2 },
+  // Cấp 1 tự động; khi CEO tắt nút tổng thì Trưởng nhóm hoặc CEO duyệt tay.
+  1: { label: 'Cấp 1', approver: 'Tự động (tắt tự động: Trưởng nhóm hoặc CEO)', roles: ['TRUONG_NHOM', 'CEO'] as string[], minutes: 30 },
   2: { label: 'Cấp 2', approver: 'Trưởng nhóm (CEO duyệt thay được)', roles: ['TRUONG_NHOM', 'CEO'], minutes: 30 },
   3: { label: 'Cấp 3', approver: 'CEO', roles: ['CEO'], minutes: 5 },
   4: { label: 'Cấp 4', approver: 'CEO', roles: ['CEO'], minutes: 120 },

@@ -3,6 +3,7 @@ import { tx, one } from './db';
 import { audit, type Actor } from './audit';
 import { calcMargin, tierFor, priceForTier, type Tier } from './pricing';
 import { approvalLevel, canApprove, deadlineFor, LEVELS, type Level } from './approval';
+import { loadControls } from './controls';
 
 export class OrderError extends Error {}
 
@@ -71,7 +72,7 @@ export async function createOrder(input: NewOrder, actor: Actor = SYSTEM) {
       throw new OrderError(`Đơn vượt hạn mức ${Number(existing.agent_limit).toLocaleString('vi-VN')} đ của AI agent.`);
     }
     const { level, reason } = approvalLevel(m.revenue, m.marginOnCost, m.net);
-    const auto = level === 1;
+    const auto = level === 1 && (await loadControls(c)).AI_AUTO;
 
     const cust = (await c.query(
       `INSERT INTO customers(name, phone, email, kind) VALUES ($1,$2,$3,$4)

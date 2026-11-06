@@ -271,6 +271,15 @@ CREATE TABLE IF NOT EXISTS payouts (
   approved_at  TIMESTAMPTZ,
   paid_at      TIMESTAMPTZ
 );
+ALTER TABLE payouts ADD COLUMN IF NOT EXISTS auto_approved BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Nút Tắt/Mở kiểm soát chi (lib/payouts.ts). Không có dòng thì dùng giá trị mặc định.
+CREATE TABLE IF NOT EXISTS payment_controls (
+  key        TEXT PRIMARY KEY,
+  enabled    BOOLEAN NOT NULL,
+  updated_by UUID REFERENCES users(id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS audit_log (
   id        BIGSERIAL PRIMARY KEY,

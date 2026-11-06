@@ -85,3 +85,44 @@ describe('trustScore & vốn', () => {
     expect(workingCapital(1e9, 200_000_000, 30).status).toBe('DANGER');
   });
 });
+
+describe('chi tiền & nút Tắt/Mở', async () => {
+  const { DEFAULT_CONTROLS, payoutBlock, autoApprovePayout, payoutApproveError, needsReauth, payoutLevel } = await import('@/lib/payouts');
+  const M = 1_000_000;
+  it('mặc định: chưa khóa gì, khóa nhập mới đang tắt', () => {
+    expect(DEFAULT_CONTROLS.AI_AUTO).toBe(true);
+    expect(DEFAULT_CONTROLS.KHOA_NHAP_MOI).toBe(false);
+    expect(payoutBlock('DAT_COC_XUONG', DEFAULT_CONTROLS)).toBeNull();
+  });
+  it('tắt một loại thì khóa đúng loại đó', () => {
+    const ctl = { ...DEFAULT_CONTROLS, NAP_ADS: false };
+    expect(payoutBlock('NAP_ADS', ctl)).toMatch(/khóa/);
+    expect(payoutBlock('NAP_AI', ctl)).toBeNull();
+  });
+  it('khóa nhập mới chặn đặt cọc xưởng và mua mẫu, không chặn nộp thuế', () => {
+    const ctl = { ...DEFAULT_CONTROLS, KHOA_NHAP_MOI: true };
+    expect(payoutBlock('DAT_COC_XUONG', ctl)).not.toBeNull();
+    expect(payoutBlock('MUA_MAU_LATR', ctl)).not.toBeNull();
+    expect(payoutBlock('NOP_THUE', ctl)).toBeNull();
+  });
+  it('tự duyệt chỉ dưới 5 triệu, khi nút tổng bật, không áp cho loại Khác', () => {
+    expect(autoApprovePayout(4_999_999, 'NAP_AI', DEFAULT_CONTROLS)).toBe(true);
+    expect(autoApprovePayout(5 * M, 'NAP_AI', DEFAULT_CONTROLS)).toBe(false);
+    expect(autoApprovePayout(1 * M, 'KHAC', DEFAULT_CONTROLS)).toBe(false);
+    expect(autoApprovePayout(1 * M, 'NAP_AI', { ...DEFAULT_CONTROLS, AI_AUTO: false })).toBe(false);
+    expect(autoApprovePayout(1 * M, 'NAP_AI', { ...DEFAULT_CONTROLS, NAP_AI: false })).toBe(false);
+  });
+  it('trưởng nhóm duyệt đến 20 triệu, không tự duyệt khoản mình đề xuất', () => {
+    const lead = { id: 'L', role: 'TRUONG_NHOM' };
+    expect(payoutApproveError(lead, { amount: 15 * M, proposed_by: 'X' })).toBeNull();
+    expect(payoutApproveError(lead, { amount: 15 * M, proposed_by: 'L' })).not.toBeNull();
+    expect(payoutApproveError(lead, { amount: 20 * M, proposed_by: 'X' })).not.toBeNull();
+    expect(payoutApproveError({ id: 'C', role: 'CEO' }, { amount: 300 * M, proposed_by: 'C' })).toBeNull();
+    expect(payoutApproveError({ id: 'K', role: 'KE_TOAN' }, { amount: 1 * M, proposed_by: 'X' })).not.toBeNull();
+  });
+  it('từ 10 triệu phải nhập lại mật khẩu; cấp theo số tiền', () => {
+    expect(needsReauth(9_999_999)).toBe(false);
+    expect(needsReauth(10 * M)).toBe(true);
+    expect(payoutLevel(250 * M)).toBe(5);
+  });
+});
