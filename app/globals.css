@@ -112,3 +112,11 @@ input[type=checkbox] { width: auto; }
   .side .grp { display: none; }
 }
 footer.site { border-top: 1px solid var(--line); background: #fff; padding: 20px 0 32px; font-size: .84rem; color: var(--muted); }
+
+/* Logo taomua.com (components/Logo.tsx) */
+.logo-tile { display: inline-block; position: relative; overflow: hidden; background: #fff; border-radius: 12px; flex: none; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.logo-tile img { display: block; object-fit: cover; }
+.side .side-logo { display: flex; align-items: center; gap: 10px; padding: 4px 6px 10px; color: #fff; font-weight: 800; }
+.side .side-logo:hover { background: none; }
+.site-footer-logo { display: flex; align-items: center; gap: 12px; }
+@media (max-width: 760px) { .side .side-logo { width: 100%; } }

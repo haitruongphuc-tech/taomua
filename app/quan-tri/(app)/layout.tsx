@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireUser, logout, can, ROLE_LABEL, type Perm } from '@/lib/auth';
 import { one } from '@/lib/db';
+import Logo from '@/components/Logo';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +30,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="admin">
       <aside className="side">
-        <Link href="/" style={{ fontWeight: 800, color: '#fff' }}>taomua · Quản trị</Link>
+        <Link href="/quan-tri" className="side-logo"><Logo size={44} /><span>taomua.com<div className="small" style={{ fontWeight: 500, color: '#c9d4ea' }}>Quản trị CEO</div></span></Link>
         {MENU.map((g) => (
           <div key={g.grp}>
             <div className="grp">{g.grp}</div>

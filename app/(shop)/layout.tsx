@@ -2,6 +2,7 @@ import Link from 'next/link';
 import CartBadge from '@/components/CartBadge';
 import { LEGAL } from '@/lib/legal';
 import { one } from '@/lib/db';
+import Logo from '@/components/Logo';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <header className="topbar">
         <div className="wrap">
           <Link href="/" className="brand">
-            <span className="logo">tm</span>
+            <Logo size={52} />
             <span>taomua.com<small>NGUỒN HÀNG SỈ TỰ ĐỘNG</small></span>
           </Link>
           <form className="search" action="/" role="search">
@@ -29,7 +30,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <main className="wrap page">{children}</main>
       <footer className="site">
         <div className="wrap stack">
-          <div><strong>{LEGAL.name}</strong> · MST {LEGAL.taxCode}</div>
+          <div className="site-footer-logo"><Logo size={64} /><div><strong>{LEGAL.name}</strong> · MST {LEGAL.taxCode}<div>taomua.com · Mua nhiều lời nhiều</div></div></div>
           <div>Giá đã gồm VAT. Tiền của bạn được giữ đến khi bạn xác nhận đã nhận hàng.</div>
           {sim > 0 && <div>Bản thử nghiệm: {sim} sản phẩm đang là dữ liệu giả lập, chưa nhận đơn thật cho các sản phẩm này.</div>}
           <div><Link href="/bao-loi">Báo lỗi / Report a problem</Link> · <Link href="/don-hang">Tra cứu đơn / Track order</Link></div>

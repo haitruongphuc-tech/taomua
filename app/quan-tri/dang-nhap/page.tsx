@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { login, currentUser } from '@/lib/auth';
+import Logo from '@/components/Logo';
 
 export const metadata = { title: 'Đăng nhập quản trị' };
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,8 @@ export default async function LoginPage({ searchParams }: { searchParams: { loi?
   return (
     <main className="wrap page" style={{ maxWidth: 420 }}>
       <form action={doLogin} className="card stack">
-        <h1>Đăng nhập quản trị</h1>
+        <div style={{ textAlign: 'center' }}><Logo size={140} /></div>
+        <h1 style={{ textAlign: 'center' }}>Đăng nhập quản trị</h1>
         {searchParams.loi && <div className="alert bad">{searchParams.loi.slice(0, 200)}</div>}
         <label className="field">Email<input name="email" type="email" required autoComplete="username" /></label>
         <label className="field">Mật khẩu<input name="password" type="password" required autoComplete="current-password" /></label>
