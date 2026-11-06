@@ -104,6 +104,11 @@ export default async function AiCenter({ searchParams }: { searchParams: { ok?: 
   return (
     <div className="stack">
       <h1>AI tự động</h1>
+      <div className="alert" style={{ borderColor: 'var(--orange)', background: 'var(--orange-50)' }} id="cho-ceo-chinh">
+        🏷️ <b>TRANG ĐÁNH DẤU — CHỜ CEO CHỈNH:</b> tên và cách chia việc của 7 agent đang theo bộ RYN (file MULTILINGUAL), đã gộp đủ chức năng bộ file 01
+        (Sourcing, Content, Ads, CSKH, Accounting, Logistics, Compliance). CEO kiểm tra trên web rồi đặt tên, chia việc lại;
+        sửa ở <code>lib/agents/index.ts</code> (bảng <code>AGENTS</code>). Huấn luyện từng agent: <Link href="/quan-tri/huan-luyen-agent">Chat & huấn luyện agent</Link>.
+      </div>
       <Flash sp={searchParams} />
       <p className="muted">
         7 agent đọc dữ liệu thật trong hệ thống, tự làm việc an toàn và đưa việc cần người vào hàng đợi One-Tap. Không agent nào chuyển tiền.

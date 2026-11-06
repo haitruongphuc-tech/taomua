@@ -8,6 +8,7 @@ import { findOrderForCustomer } from './orders';
 import { classifyIssue } from './complaints';
 import { chat, aiEnabled } from './ai';
 import { LEGAL } from './legal';
+import { trainedAnswer, lessonRules } from './lessons';
 
 export type Intent = 'CHAO' | 'GIA' | 'TON_KHO' | 'DON_HANG' | 'VAN_CHUYEN' | 'THANH_TOAN' | 'HOA_DON' | 'KHIEU_NAI' | 'NGUOI_THAT' | 'KHAC';
 export type Reply = { reply: string; intent: Intent; links: { label: string; href: string }[]; answeredBy: 'AI_QUY_TAC' | 'AI_NGON_NGU' | 'CHUYEN_NGUOI' };
@@ -54,6 +55,12 @@ export async function answer(message: string, ctx: { phone?: string } = {}): Pro
   const intent = detectIntent(msg);
   const links: Reply['links'] = [];
   const done = (reply: string, by: Reply['answeredBy'] = 'AI_QUY_TAC'): Reply => ({ reply, intent, links, answeredBy: by });
+
+  // CEO / kỹ sư đã dạy câu trả lời chuẩn (Quản trị → Chat & huấn luyện agent) thì dùng trước; tra đơn cụ thể vẫn tra dữ liệu thật.
+  if (!/TM\d{4,}/i.test(msg)) {
+    const taught = await trainedAnswer(msg);
+    if (taught) return done(taught);
+  }
 
   if (intent === 'DON_HANG') {
     const code = msg.toUpperCase().match(/TM\d{4,}/)?.[0];
@@ -102,8 +109,9 @@ export async function answer(message: string, ctx: { phone?: string } = {}): Pro
   // Câu tự do: AI ngôn ngữ trả lời trong phạm vi thông tin công khai; không có khóa thì chuyển người.
   if (aiEnabled()) {
     const cats = (await q('SELECT DISTINCT category FROM products WHERE published')).map((r) => r.category).join(', ');
+    const rules = (await lessonRules('RYN-SALES')).map((r) => `- ${r}`).join('\n');
     const out = await chat([
-      { role: 'system', content: `Bạn là trợ lý CSKH của taomua.com (sàn sỉ, ${LEGAL.name}). Trả lời ngắn, lịch sự, cùng ngôn ngữ với khách. Chỉ dùng thông tin: giá sỉ 4 bậc 10/50/100/500 cái đã gồm VAT 8%; tiền được giữ đến khi khách xác nhận nhận hàng; ngành hàng: ${cats}. Không bịa giá, không hứa giảm giá, không hỏi thông tin thẻ/mật khẩu. Nếu không chắc, mời khách gửi yêu cầu báo giá ở /bao-gia hoặc để lại liên hệ ở /bao-loi.` },
+      { role: 'system', content: `Bạn là trợ lý CSKH của taomua.com (sàn sỉ, ${LEGAL.name}). Trả lời ngắn, lịch sự, cùng ngôn ngữ với khách. Chỉ dùng thông tin: giá sỉ 4 bậc 10/50/100/500 cái đã gồm VAT 8%; tiền được giữ đến khi khách xác nhận nhận hàng; ngành hàng: ${cats}. Không bịa giá, không hứa giảm giá, không hỏi thông tin thẻ/mật khẩu. Nếu không chắc, mời khách gửi yêu cầu báo giá ở /bao-gia hoặc để lại liên hệ ở /bao-loi.${rules ? `\nQuy tắc CEO đã dạy (bắt buộc):\n${rules}` : ''}` },
       { role: 'user', content: msg },
     ]).catch(() => null);
     if (out) return done(out.slice(0, 1200), 'AI_NGON_NGU');

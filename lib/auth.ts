@@ -5,13 +5,13 @@ import { one, q } from './db';
 import { hashPassword, verifyPassword } from './password';
 
 export { hashPassword, verifyPassword };
-export type Role = 'CEO' | 'TRUONG_NHOM' | 'KE_TOAN' | 'NHAN_VIEN';
+export type Role = 'CEO' | 'TRUONG_NHOM' | 'KE_TOAN' | 'NHAN_VIEN' | 'KY_SU';
 export type User = { id: string; email: string; name: string; role: Role };
-export const ROLE_LABEL: Record<Role, string> = { CEO: 'CEO', TRUONG_NHOM: 'Trưởng nhóm', KE_TOAN: 'Kế toán', NHAN_VIEN: 'Nhân viên' };
+export const ROLE_LABEL: Record<Role, string> = { CEO: 'CEO', TRUONG_NHOM: 'Trưởng nhóm', KE_TOAN: 'Kế toán', NHAN_VIEN: 'Nhân viên', KY_SU: 'Kỹ sư AI' };
 
 // Ma trận quyền: mỗi quyền liệt kê các vai trò được làm.
 export const PERMS = {
-  'orders.view': ['CEO', 'TRUONG_NHOM', 'KE_TOAN', 'NHAN_VIEN'],
+  'orders.view': ['CEO', 'TRUONG_NHOM', 'KE_TOAN', 'NHAN_VIEN', 'KY_SU'],
   'orders.fulfil': ['CEO', 'TRUONG_NHOM', 'NHAN_VIEN'],
   'orders.payment': ['CEO', 'KE_TOAN'],
   'orders.create': ['CEO', 'TRUONG_NHOM', 'NHAN_VIEN'],
@@ -26,7 +26,8 @@ export const PERMS = {
   'payout.propose': ['CEO', 'TRUONG_NHOM', 'KE_TOAN', 'NHAN_VIEN'],
   'payout.approve': ['CEO', 'TRUONG_NHOM'], // Trưởng nhóm chỉ đến Cấp 2 (< 20 triệu), xem lib/payouts.ts
   'payout.controls': ['CEO'],
-  'agents.run': ['CEO', 'TRUONG_NHOM'],
+  'agents.run': ['CEO', 'TRUONG_NHOM', 'KY_SU'],
+  'agents.train': ['CEO', 'TRUONG_NHOM', 'KY_SU'], // chat & huấn luyện 7 agent
   'sourcing.choose': ['CEO'], // AI đề xuất xưởng, CEO quyết định
   'marketing.edit': ['CEO', 'TRUONG_NHOM', 'NHAN_VIEN'],
   'logistics.edit': ['CEO', 'TRUONG_NHOM'],

@@ -73,6 +73,8 @@ Dữ liệu sản phẩm, xưởng, giá, dự toán, bảng giá ship, chiến 
 
 Lịch 6 giờ: `n8n/taomua_7_agents_6h.json` hoặc `npm run agents`.
 
+**Khung chat**: (1) khách hàng ↔ CSKH AI ở mọi trang cửa hàng (nút "Hỏi AI"); (2) CEO / Trưởng nhóm / **Kỹ sư AI** ↔ từng agent ở `/quan-tri/huan-luyen-agent`: hỏi việc, ra lệnh chạy, dạy quy tắc (`dạy: …`), dạy câu hỏi - đáp (`hỏi: … => …`), bỏ bài (`quên #số`). Câu đã dạy cho RYN-SALES được CSKH dùng trả lời khách ngay; câu khách hỏi mà AI chưa trả lời được hiện ra để dạy. Câu tự do: AI ngôn ngữ khi có khóa, chưa có thì GIẢ LẬP.
+
 ## 5. Chồng lấn đã sửa trong lần đối soát này
 
 - Xóa `docs/goc/` (bản sao spec, Excel, mockup; workflow n8n cũ còn Telegram; mockup CEO bản cũ). `Du_toan_12_thang.xlsx` chuyển sang `excels/`.
@@ -83,7 +85,7 @@ Lịch 6 giờ: `n8n/taomua_7_agents_6h.json` hoặc `npm run agents`.
 
 ## 6. Mâu thuẫn giữa các file thuyết minh (cần chủ dự án chốt)
 
-1. **7 agent**: 01 chương 3 ghi Sourcing / Content / Ads / CSKH / Accounting / Logistics / Compliance; MULTILINGUAL ghi RYN-TREND … RYN-LOGI. Code theo bộ RYN và gộp đủ chức năng của bộ kia (bảng mục 4).
+1. **7 agent** — 🏷️ **ĐÁNH DẤU, CHỜ CEO CHỈNH**: 01 chương 3 ghi Sourcing / Content / Ads / CSKH / Accounting / Logistics / Compliance; MULTILINGUAL ghi RYN-TREND … RYN-LOGI. Code theo bộ RYN và gộp đủ chức năng của bộ kia (bảng mục 4). CEO kiểm tra trên web rồi đặt tên, chia việc lại (trang `/quan-tri/ai` có nhãn đánh dấu; sửa bảng `AGENTS` trong `lib/agents/index.ts`).
 2. **Cấp duyệt**: 01 ghi theo biên và giá trị; code theo giá trị đơn + sàn biên (quy tắc đã chốt trong README).
 3. **Pháp nhân**: ĐÃ CHỐT 06/11/2026 — TAOMUA Co., LTD, đại diện pháp luật Lê Thị Huỳnh Như (khớp 01 chương 1). MST, địa chỉ nhập ở `.env`.
 4. **PIN 9999**: spec dùng PIN; code thay bằng nhập lại mật khẩu (PIN đã công khai trên GitHub).

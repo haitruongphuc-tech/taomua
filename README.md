@@ -105,6 +105,12 @@ Nút tổng tắt thì không gì tự làm, trừ phân tích dữ liệu. Khô
 
 **Bảo mật**: đăng nhập bằng email + mật khẩu (scrypt), phiên lưu ở máy chủ, khóa sau 5 lần sai trong 15 phút, phân quyền theo vai trò. Không có PIN chung. Khách không bao giờ thấy giá vốn, phí hay biên. Không có số tài khoản nào trong mã nguồn; thông tin nhận tiền lấy từ biến môi trường.
 
+## Khung chat
+
+- **Khách hàng ↔ CSKH AI**: nút "Hỏi AI" ở mọi trang cửa hàng.
+- **CEO, Trưởng nhóm, Kỹ sư AI ↔ 7 agent**: *Quản trị → Chat & huấn luyện agent* (`/quan-tri/huan-luyen-agent`). Lệnh: `chạy`, `báo cáo`, `nhiệm vụ`, `đã học gì`, `dạy: <quy tắc>`, `hỏi: <câu hỏi> => <câu trả lời>`, `quên #<số>`. Câu dạy cho RYN-SALES được CSKH dùng trả lời khách. Vai trò mới **Kỹ sư AI** (tạo ở *Người dùng*) được chạy và huấn luyện agent, xem đơn; không có quyền duyệt hay chi tiền.
+- 🏷️ Trang 7 agent đang **đánh dấu chờ CEO đặt tên và chia việc** lại.
+
 ## Chế độ GIẢ LẬP
 
 Chưa có tài khoản thật thì mọi dịch vụ ngoài chạy **giả lập** để thấy trọn luồng 95% tự động: trend 20 nguồn, tìm xưởng 1688, camera QC, video 7 ngôn ngữ, tìm bằng ảnh, cổng thanh toán 9PAY / VNPay / Momo / Alipay, QR chuyển khoản, chuyển khoản chi, hóa đơn điện tử, Zalo / email.

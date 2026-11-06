@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email         TEXT NOT NULL UNIQUE,
   name          TEXT NOT NULL,
-  role          TEXT NOT NULL CHECK (role IN ('CEO','TRUONG_NHOM','KE_TOAN','NHAN_VIEN')),
+  role          TEXT NOT NULL CHECK (role IN ('CEO','TRUONG_NHOM','KE_TOAN','NHAN_VIEN','KY_SU')),
   password_hash TEXT NOT NULL,
   telegram_chat_id TEXT,
   active        BOOLEAN NOT NULL DEFAULT TRUE,
@@ -553,3 +553,32 @@ CREATE TABLE IF NOT EXISTS connector_runs (
 CREATE INDEX IF NOT EXISTS connector_runs_at ON connector_runs(connector, created_at DESC);
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS transfer_mode TEXT;      -- THAT / GIA_LAP khi chuyển qua API ngân hàng
 ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS invoice_mode TEXT; -- THAT / GIA_LAP khi xuất hóa đơn qua API
+
+-- ===== Chat & huấn luyện 7 agent (CEO, Trưởng nhóm, Kỹ sư AI) =====
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('CEO','TRUONG_NHOM','KE_TOAN','NHAN_VIEN','KY_SU'));
+-- Bài học: QUY_TAC = điều agent phải nhớ khi làm việc / trả lời; HOI_DAP = câu hỏi mẫu + câu trả lời chuẩn (CSKH dùng trả lời khách).
+CREATE TABLE IF NOT EXISTS agent_lessons (
+  id            BIGSERIAL PRIMARY KEY,
+  agent         TEXT NOT NULL,
+  kind          TEXT NOT NULL CHECK (kind IN ('QUY_TAC','HOI_DAP')),
+  question      TEXT,
+  answer        TEXT NOT NULL,
+  active        BOOLEAN NOT NULL DEFAULT TRUE,
+  used          INT NOT NULL DEFAULT 0,
+  created_by    UUID REFERENCES users(id),
+  created_label TEXT NOT NULL DEFAULT '',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS agent_lessons_agent ON agent_lessons(agent, active);
+CREATE TABLE IF NOT EXISTS agent_chat (
+  id         BIGSERIAL PRIMARY KEY,
+  agent      TEXT NOT NULL,
+  sender     TEXT NOT NULL CHECK (sender IN ('NGUOI','AGENT')),
+  user_id    UUID REFERENCES users(id),
+  user_label TEXT NOT NULL DEFAULT '',
+  body       TEXT NOT NULL,
+  mode       TEXT CHECK (mode IN ('LENH','AI_NGON_NGU','GIA_LAP')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS agent_chat_agent ON agent_chat(agent, created_at DESC);
