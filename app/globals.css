@@ -116,7 +116,16 @@ footer.site { border-top: 1px solid var(--line); background: #fff; padding: 20px
 /* Logo taomua.com (components/Logo.tsx) */
 .logo-tile { display: inline-block; position: relative; overflow: hidden; background: #fff; border-radius: 12px; flex: none; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
 .logo-tile img { display: block; object-fit: cover; }
-.side .side-logo { display: flex; align-items: center; gap: 10px; padding: 4px 6px 10px; color: #fff; font-weight: 800; }
+.side .side-logo { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 4px 6px 6px; color: #fff; font-weight: 800; }
 .side .side-logo:hover { background: none; }
 .site-footer-logo { display: flex; align-items: center; gap: 12px; }
 @media (max-width: 760px) { .side .side-logo { width: 100%; } }
+
+/* Slogan taomua.com (lib/slogans.ts) */
+.slogan-bar { background: var(--orange); color: #fff; font-weight: 700; font-size: .95rem; }
+.slogan-bar .wrap { padding-block: 7px; text-align: center; letter-spacing: .01em; }
+.slogan-list { color: var(--orange-ink); font-weight: 600; }
+.slogan-inline { color: var(--orange-ink); font-weight: 700; }
+.side .side-slogan { color: #ffb36b; font-size: .78rem; font-weight: 600; padding: 0 10px 6px; }
+@media (max-width: 760px) { .side .side-slogan { width: 100%; } }
+.logo-tile.logo-ngang { display: inline-flex; align-items: center; gap: 4px; width: auto; }

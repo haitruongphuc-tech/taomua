@@ -36,6 +36,12 @@ Tài khoản seed: `ceo@`, `truongnhom@`, `ketoan@`, `nhanvien@taomua.local`. Đ
 | Lược đồ | `db/schema.sql` |
 | Tài liệu gốc | `docs/goc/` (spec, workflow n8n, mockup, dự toán) |
 
+## Thương hiệu: logo và slogan
+
+Logo ở mọi trang (đầu trang, chân trang, thanh bên quản trị, đăng nhập, 404, biểu tượng tab, ảnh chia sẻ link). Sửa logo: thay file trong `public/brand/` giữ nguyên tên (`logo-full.png` đầy đủ, `logo-mark.png` túi mặt cười, `logo-chu.png` chữ ngang, `logo-goc.jpg` ảnh gốc), cấu hình ở `lib/brand.ts`; biểu tượng tab ở `app/icon.png`, `app/apple-icon.png`.
+
+Slogan (`lib/slogans.ts`), mỗi trang một câu: trang chủ *Mua càng nhiều giá càng thấp* · sản phẩm, yêu cầu báo giá *Mua càng nhiều chiết khấu càng cao* · giỏ hàng *Mua càng nhiều thưởng càng lớn* · tra cứu đơn, báo lỗi, truy xuất, quản trị, đăng nhập, 404 *taomua cùng vui với bạn*. Chân trang hiện cả 4 câu.
+
 ## Quy tắc đã chốt với chủ dự án
 
 **Biên ròng sau thuế, phí** (giá bán đã gồm VAT):

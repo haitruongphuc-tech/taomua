@@ -262,3 +262,15 @@ describe('AI phân loại khiếu nại', async () => {
     expect(classifyIssue({ kind: 'LOI', message: 'Ảnh sản phẩm bị mờ' }).severity).toBe('THAP');
   });
 });
+
+describe('slogan theo trang', async () => {
+  const { sloganFor, SLOGANS } = await import('@/lib/slogans');
+  it('mỗi trang một câu', () => {
+    expect(sloganFor('/')).toBe(SLOGANS.gia);
+    expect(sloganFor('/san-pham/abc')).toBe(SLOGANS.chietkhau);
+    expect(sloganFor('/bao-gia')).toBe(SLOGANS.chietkhau);
+    expect(sloganFor('/gio-hang')).toBe(SLOGANS.thuong);
+    expect(sloganFor('/don-hang')).toBe(SLOGANS.vui);
+    expect(sloganFor('/truy-xuat/AO-3D')).toBe(SLOGANS.vui);
+  });
+});
