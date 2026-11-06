@@ -2,7 +2,10 @@
 
 Đối chiếu từng mục trong file `00`–`10` và `docs/` với mã nguồn. Ký hiệu:
 **✅ Đã code** (chạy ngay) · **🔌 Đã code, chạy khi có khóa** (nhập khóa vào `.env`, xem *Quản trị → Thông tin cần nhập*) ·
-**⚠️ Cố ý làm khác** (lý do ghi bên cạnh).
+**⚠️ Cố ý làm khác** (lý do ghi bên cạnh) · **🧪 GIẢ LẬP** (chạy trọn luồng bằng dữ liệu mẫu có nhãn, tự chuyển sang thật khi có khóa).
+
+**Chế độ GIẢ LẬP** (06/11/2026): mọi dịch vụ ngoài chưa có tài khoản đều chạy giả lập, có nhãn "GIẢ LẬP" trên màn hình, ghi nhật ký ở *Quản trị → Thông báo & kết nối* (`connector_runs`, `notification_log`).
+Thao tác dính tiền giả lập (cổng thanh toán, chuyển khoản, hóa đơn) chỉ chạy khi `SIM_ACTIONS=on` hoặc không phải production; chạy thật thì tắt, không bao giờ tự chuyển tiền thật khi chưa nối API ngân hàng.
 
 Dữ liệu sản phẩm, xưởng, giá, dự toán, bảng giá ship, chiến dịch mẫu hiện là **giả lập**, chủ dự án sửa sau.
 
@@ -22,8 +25,8 @@ Dữ liệu sản phẩm, xưởng, giá, dự toán, bảng giá ship, chiến 
 
 | # | Endpoint | Trạng thái |
 |---|---|---|
-| 1 | trend-hunter/scan `{source, limit}` → `{trends}` | ✅ dữ liệu nội bộ · 🔌 TikTok / 1688 / Amazon / Walmart / Google Trends |
-| 2 | supplier-brain/find `{product_name, category}` → `{suppliers}` + 3 dự phòng | ✅ · 🔌 tìm mới trên 1688 / Accio |
+| 1 | trend-hunter/scan `{source, limit}` → `{trends}` | ✅ dữ liệu nội bộ · 🧪 20 nguồn ngoài · 🔌 TikTok / 1688 / Amazon / Walmart / Google Trends |
+| 2 | supplier-brain/find `{product_name, category}` → `{suppliers}` + 3 dự phòng | ✅ · 🧪 tìm xưởng 1688 (AI tự tìm, CEO chọn) · 🔌 1688 / Accio |
 | 3 | supplier-brain/trust-score → `{trust_score, factors}` | ✅ |
 | 4 | pricing-engine/calculate `{cost, fee, quantity, tier}` → 4 bậc giá, biên, cấp, vốn | ✅ |
 | 5 | approval/queue (thay Telegram) | ✅ |
@@ -32,7 +35,7 @@ Dữ liệu sản phẩm, xưởng, giá, dự toán, bảng giá ship, chiến 
 | 8 | agent-gateway/profiles → `{limit, spent, remaining, agent_gateway}` | ✅ |
 | 9 | wfs/fulfillment → `{tracking_id, status, wfs_type}` | ✅ |
 | 10 | trade-assurance/hold `HOLD / RELEASED / REFUND` | ✅ (giải ngân, hoàn tiền: chỉ CEO) |
-| 11 | rynn-brain/check → `{defect_rate, passed}` | ✅ nhận kết quả kiểm · 🔌 camera AI |
+| 11 | rynn-brain/check → `{defect_rate, passed}` | ✅ nhận kết quả kiểm · 🧪 camera QC từ ảnh lô hàng · 🔌 camera AI |
 | 12 | latr/test → `TESTING / SCALING / STOPPED` | ✅ |
 | 13 | scintilla/analytics → `{sales, roas, ctr, bien_rong, von_luu_dong, vong_quay}` | ✅ |
 | 14 | working-capital/calculate | ✅ |
@@ -45,24 +48,26 @@ Dữ liệu sản phẩm, xưởng, giá, dự toán, bảng giá ship, chiến 
 | `/` B2B: bảng giá 4 bậc, TrustScore, xưởng, trợ lý tìm hàng AI (câu tự nhiên), tìm bằng giọng nói, máy tính lời siêu tốc 10→500, so sánh giá đối thủ, logo, slogan | ✅ |
 | `/san-pham/[id]` (= `/product/[id]`): 4 bậc giá + thanh kéo, TrustScore, QR 7 ngôn ngữ, so sánh giá, lịch sử giá 365 ngày | ✅ |
 | `/truy-xuat/[sku]` (= `/qr/[id]`): truy xuất 7 ngôn ngữ | ✅ (không hiện giá vốn, biên: quy tắc đã chốt) |
-| `/shop` 9mua bán lẻ kiểu TikTok, mua 1 chạm | ✅ · 🔌 cổng thanh toán 9PAY / VNPay / Momo / Alipay; ⚠️ video thật cần HeyGen |
+| `/shop` 9mua bán lẻ kiểu TikTok, mua 1 chạm | ✅ · 🧪 cổng 9PAY / VNPay / Momo / Alipay, QR VietQR (thật khi có số TK + BIN) · 🧪 video 7 ngôn ngữ (giọng trình duyệt) · 🔌 HeyGen |
 | `/quan-tri` (= `/admin`) CEO: tổng quan, kế toán thuế, hóa đơn, vốn, marketing, logistics, CSKH, khủng hoảng & khiếu nại Kanban, 7 agent, chi tiền | ✅ |
 | `/quan-tri/duyet-nhanh` (= `/admin/approval`) Quick Approve Center + bảng phân quyền 95% AI | ✅ (trang "Chờ duyệt" cũ đã gộp vào đây) |
 | `/quan-tri/kiem-soat-chi` (= `/admin/payment`): phân quyền chi theo cấp, 10 nút Tắt/Mở (gồm canh mua giảm giá), Trade Assurance luôn bật | ✅ |
 | Canvas sửa giao diện bằng lời | ✅ `/quan-tri/giao-dien` (sửa bằng lời cần AI_API_KEY) |
 | Logo mọi trang, slogan từng trang | ✅ |
 | Ngôn ngữ 7 thứ tiếng | ✅ trang truy xuất, giỏ hàng & tra cứu song ngữ · 🔌 tên sản phẩm 7 ngôn ngữ (AI dịch khi có khóa) |
-| Image search (tìm bằng ảnh), AR "Shop to Light" | ⚠️ chưa làm: cần dịch vụ thị giác / AR |
+| Image search (tìm bằng ảnh), AR "Shop to Light" | ✅ AR bằng camera trên trang sản phẩm · 🧪 tìm bằng ảnh (🔌 AI_VISION_MODEL) |
+| Kế toán: hóa đơn điện tử 1 nút; Chi tiền: chuyển khoản 1 nút | 🧪 · 🔌 VNPT / Viettel, API ngân hàng |
+| Thông báo Zalo / email cho CEO và khách (báo phí ship quốc tế) | 🧪 hộp thư · 🔌 Zalo OA, SMTP |
 
 ## 4. 7 AI agent (MULTILINGUAL_7_AI_SPEC, 01 chương 3, ALGORITHM mục 4)
 
 | Agent | Đã tự động | Cần khóa ngoài |
 |---|---|---|
-| RYN-TREND | xếp hạng hàng hot, gợi ý bán thử | 🔌 20 nguồn trend ngoài |
-| RYN-SUPPLY | TrustScore, tìm xưởng cùng ngành theo giá/số lượng/MOQ, CEO chọn, canh xưởng giảm giá ≥ 10% | 🔌 1688 / Accio |
+| RYN-TREND | xếp hạng hàng hot, gợi ý bán thử, trend ngoài ≥ 90 điểm tự mở tìm xưởng (tối đa 3 / ngày) | 🧪 20 nguồn · 🔌 khóa thật |
+| RYN-SUPPLY | TrustScore, tìm xưởng cùng ngành theo giá/số lượng/MOQ, chưa có thì tự tìm 1688, CEO chọn, canh xưởng giảm giá ≥ 10% | 🧪 1688 · 🔌 1688 / Accio |
 | RYN-NEGO | 4 kịch bản đàm phán tiếng Trung, đàm phán lại khi khách mua 500 cái | 🔌 video HeyGen tiếng Trung |
 | RYN-PRICE | giữ biên ≥ 15%, đối thủ rẻ hơn giảm 2%, kiểm giá trên kênh bán / 9mua | 🔌 giá Amazon / Walmart tự động |
-| RYN-TRACE | lịch sử giá vốn, QC < 98%, **Compliance** (xưởng chưa chứng nhận, hóa đơn chưa xuất) | 🔌 camera QC |
+| RYN-TRACE | lịch sử giá vốn, QC < 98%, **Compliance** (xưởng chưa chứng nhận, hóa đơn chưa xuất) | 🧪 camera QC · 🔌 camera thật |
 | RYN-SALES | báo giá RFQ, LATR, quảng cáo ROAS/CTR, CSKH AI chat, **Content** (AI viết mô tả, người duyệt), dịch 7 ngôn ngữ | 🔌 AI ngôn ngữ, Ads API, video |
 | RYN-LOGI | biên an toàn vốn, khóa nhập, chọn hãng ship rẻ nhất, đơn quá hạn / chờ thanh toán / chờ giải ngân | 🔌 API GHN / GHTK / J&T, ngân hàng |
 
@@ -80,7 +85,7 @@ Lịch 6 giờ: `n8n/taomua_7_agents_6h.json` hoặc `npm run agents`.
 
 1. **7 agent**: 01 chương 3 ghi Sourcing / Content / Ads / CSKH / Accounting / Logistics / Compliance; MULTILINGUAL ghi RYN-TREND … RYN-LOGI. Code theo bộ RYN và gộp đủ chức năng của bộ kia (bảng mục 4).
 2. **Cấp duyệt**: 01 ghi theo biên và giá trị; code theo giá trị đơn + sàn biên (quy tắc đã chốt trong README).
-3. **Pháp nhân**: 01 ghi taomua.com đứng tên Lê Huỳnh Như, nhà đầu tư Nữ Hoàng Nội Thất "tạm ngưng"; code đang dùng CÔNG TY CP NỮ HOÀNG NỘI THẤT, MST 0316437942 (theo giấy chủ dự án cung cấp trước đó).
+3. **Pháp nhân**: ĐÃ CHỐT 06/11/2026 — TAOMUA Co., LTD, đại diện pháp luật Lê Thị Huỳnh Như (khớp 01 chương 1). MST, địa chỉ nhập ở `.env`.
 4. **PIN 9999**: spec dùng PIN; code thay bằng nhập lại mật khẩu (PIN đã công khai trên GitHub).
-5. **Nút chi tiền tự chuyển khoản**: spec muốn tự CK; code chỉ duyệt và ghi nhận, kế toán chuyển trên ngân hàng (an toàn tiền thật).
+5. **Nút chi tiền tự chuyển khoản**: đã có nút "Chuyển khoản" cho khoản đã duyệt (≥ 10 triệu nhập lại mật khẩu). Chưa có API ngân hàng thì GIẢ LẬP; khi nối `BANK_API_URL` mới chuyển thật. Không tự chuyển khi chưa có người bấm.
 6. **Slogan /shop**: SLOGAN_MUA_NHIEU_LOI_NHIEU gợi ý "Tao thích cứ mua"; code dùng 4 câu chủ dự án chọn.

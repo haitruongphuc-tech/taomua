@@ -4,6 +4,7 @@ import { q, one } from '@/lib/db';
 import { isUuid } from '@/lib/catalog';
 import { markPaid, shipOrder, markDelivered, releaseEscrow, refundOrder, cancelOrder, setShipFee } from '@/lib/orders';
 import { countryName } from '@/lib/countries';
+import { notifyCustomer } from '@/lib/notify';
 import { cheapest, guessZone } from '@/lib/logistics';
 import { vnd, pct, dt, label } from '@/lib/format';
 import { runAction } from '@/lib/action';
@@ -27,7 +28,15 @@ async function act(fd: FormData) {
       case 'release': await releaseEscrow(id, { kind: 'CEO', actor: a }); return 'Đã giải ngân tiền đang giữ.';
       case 'refund': await refundOrder(id, a, String(fd.get('reason') ?? '')); return 'Đã ghi nhận hoàn tiền. Nhớ thực hiện chuyển khoản hoàn cho khách.';
       case 'cancel': await cancelOrder(id, a, String(fd.get('reason') ?? '')); return 'Đã hủy đơn.';
-      case 'shipfee': await setShipFee(id, Number(fd.get('ship_fee')), a); return 'Đã lưu phí vận chuyển. Gửi email báo khách tổng cần thanh toán.';
+      case 'shipfee': {
+        await setShipFee(id, Number(fd.get('ship_fee')), a);
+        const o = await one(`SELECT o.code, o.tong_dt, o.ship_fee, o.ship_country, COALESCE(o.customer_email, cu.email) AS email FROM wholesale_orders o
+          JOIN customers cu ON cu.id=o.customer_id WHERE o.id=$1`, [id]);
+        const due = Number(o.tong_dt) + Number(o.ship_fee);
+        await notifyCustomer(o.email, `taomua.com - Shipping quote for order ${o.code} / Báo giá vận chuyển`,
+          `Order ${o.code} (${o.ship_country}).\nGoods: ${vnd(o.tong_dt)}\nShipping: ${vnd(o.ship_fee)}\nTotal due: ${vnd(due)}\n\nTrack and pay: ${process.env.SITE_URL ?? ''}/don-hang?ma=${o.code}\n\nĐơn ${o.code}: tiền hàng ${vnd(o.tong_dt)}, phí vận chuyển ${vnd(o.ship_fee)}, tổng cần thanh toán ${vnd(due)}.`);
+        return o.email ? `Đã lưu phí vận chuyển và gửi email báo giá cho khách (${o.email}).` : 'Đã lưu phí vận chuyển. Đơn chưa có email khách.';
+      }
     }
   });
 }

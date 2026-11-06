@@ -4,6 +4,11 @@ import { getProduct, priceComparisons } from '@/lib/catalog';
 import AddToCart from '@/components/AddToCart';
 import TraceQr from '@/components/TraceQr';
 import PriceHistory from '@/components/PriceHistory';
+import ProductVideo from '@/components/ProductVideo';
+import ArView from '@/components/ArView';
+import { simVideoScript } from '@/lib/sim';
+import { connectorEnabled } from '@/lib/connectors';
+import { one } from '@/lib/db';
 import { Trust } from '@/components/ProductCard';
 import { vnd, dt } from '@/lib/format';
 
@@ -18,6 +23,8 @@ export default async function ProductPage({ params }: { params: { id: string } }
   const p = await getProduct(params.id);
   if (!p) notFound();
   const comps = await priceComparisons(p.id);
+  const i18n = (await one('SELECT name_i18n FROM products WHERE id=$1', [p.id]))?.name_i18n ?? {};
+  const scripts = simVideoScript({ name: p.name, price10: Number(p.price_taomua_10), price500: Number(p.price_taomua_500) }, i18n);
   const ours = p.price_taomua_10;
   return (
     <div className="stack">
@@ -31,6 +38,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
           <h1>{p.name}</h1>
           <div className="muted">Mã {p.sku} · {p.stock_note}</div>
           <p>{p.description}</p>
+          <ArView emoji={p.image_emoji} name={p.name} />
           <AddToCart id={p.id} moq={p.moq} prices={{ 10: p.price_taomua_10, 50: p.price_taomua_50, 100: p.price_taomua_100, 500: p.price_taomua_500 }} />
         </div>
       </div>
@@ -49,6 +57,8 @@ export default async function ProductPage({ params }: { params: { id: string } }
           <p className="muted small">Hàng lỗi được hoàn tiền từ khoản đang giữ.</p>
         </section>
       </div>
+
+      <ProductVideo emoji={p.image_emoji} name={p.name} scripts={scripts} live={connectorEnabled('HEYGEN')} />
 
       <PriceHistory productId={p.id} />
 

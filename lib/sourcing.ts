@@ -37,11 +37,11 @@ const catMatch = (need: string | null, cats: string[]) => !!need && cats.some((c
 export function rankCandidates(need: Need, cands: Candidate[]): Ranked[] {
   const fee = need.feePerUnit ?? 0;
   const intl = !!need.country && need.country !== 'VN';
-  // Báo giá chỉ tính khi đúng sản phẩm đó, hoặc mô tả hàng giống ≥ 50% (và cùng ngành nếu đã biết ngành).
+  // Báo giá chỉ tính khi đúng sản phẩm đó, hoặc mô tả hàng giống ≥ 60% (và cùng ngành nếu đã biết ngành).
   // Giá của món khác cùng ngành (thau ≠ bình giữ nhiệt) không dùng để so.
   const offerFits = (o: NonNullable<Candidate['offer']>) =>
     (!!need.productId && o.product_id === need.productId) ||
-    (textOverlap(need.text, o.product_text) >= 0.5 && (!need.category || fold(o.category) === fold(need.category)));
+    (textOverlap(need.text, o.product_text) >= 0.6 && (!need.category || fold(o.category) === fold(need.category)));
   const withOffer = cands.filter((c) => c.offer && offerFits(c.offer));
   const quoted = new Set(withOffer.map((c) => c.supplier.id));
   // Xưởng cùng ngành chưa báo giá món này: liệt kê để biết cần hỏi giá ai.

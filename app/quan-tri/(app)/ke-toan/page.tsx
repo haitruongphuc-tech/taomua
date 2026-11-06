@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { requireUser, actorOf, can } from '@/lib/auth';
-import { q } from '@/lib/db';
+import { q, tx } from '@/lib/db';
+import { issueEInvoice, simActionsAllowed } from '@/lib/money-sim';
+import { connectorEnabled } from '@/lib/connectors';
 import { audit } from '@/lib/audit';
 import { runAction, UserError } from '@/lib/action';
 import { isUuid } from '@/lib/catalog';
@@ -22,6 +24,18 @@ async function saveInvoice(fd: FormData) {
     if (!r.length) throw new UserError('Chỉ ghi hóa đơn cho đơn đã nhận tiền.');
     await audit(actorOf(u), 'invoice.record', 'order', id, { code: r[0].code, invoice_no: no });
     return `Đã ghi hóa đơn ${no} cho đơn ${r[0].code}.`;
+  });
+}
+
+async function issue(fd: FormData) {
+  'use server';
+  const u = await requireUser('orders.payment');
+  await runAction('/quan-tri/ke-toan', async () => {
+    const id = String(fd.get('id'));
+    if (!isUuid(id)) throw new UserError('Đơn không hợp lệ.');
+    const r = await tx((c) => issueEInvoice(c, id));
+    await audit(actorOf(u), 'invoice.issue', 'order', id, r);
+    return r.mode === 'THAT' ? `Đã xuất hóa đơn ${r.invoice_no}.` : `Hóa đơn GIẢ LẬP ${r.invoice_no} (chưa nối VNPT / Viettel).`;
   });
 }
 
@@ -53,7 +67,7 @@ export default async function Accounting({ searchParams }: { searchParams: { ok?
       <h1>Kế toán & thuế</h1>
       <Flash sp={searchParams} />
       <p className="muted small">
-        {LEGAL.name} · MST {LEGAL.taxCode}. Số liệu lấy từ đơn đã nhận tiền (trừ đơn hoàn tiền), theo ngày nhận tiền. VAT = giá × 8/108; TNDN tính tạm
+        {LEGAL.name} · MST {LEGAL.taxCode} · Đại diện pháp luật {LEGAL.representative}. Số liệu lấy từ đơn đã nhận tiền (trừ đơn hoàn tiền), theo ngày nhận tiền. VAT = giá × 8/108; TNDN tính tạm
         trên từng đơn có lãi, quyết toán năm do kế toán làm. Chưa nối API MISA / FAST / VNPT Invoice: tải sổ bán hàng CSV để nhập.
       </p>
       <div className="row" style={{ gap: 8 }}>
@@ -81,6 +95,9 @@ export default async function Accounting({ searchParams }: { searchParams: { ok?
             <td>{can(u, 'orders.payment') ? (
               <form action={saveInvoice} className="row" style={{ gap: 6 }}><input type="hidden" name="id" value={o.id} />
                 <input name="invoice_no" placeholder="Số HĐ" required style={{ width: 120 }} /><button className="btn sm">Ghi</button></form>
+            ) : '—'}{can(u, 'orders.payment') && (connectorEnabled('INVOICE') || simActionsAllowed()) ? (
+              <form action={issue} style={{ marginTop: 4 }}><input type="hidden" name="id" value={o.id} />
+                <button className="btn blue sm">{connectorEnabled('INVOICE') ? 'Xuất HĐ điện tử' : 'Xuất HĐ (GIẢ LẬP)'}</button></form>
             ) : '—'}</td>
           </tr>
         ))}</tbody>

@@ -2,7 +2,7 @@
 
 Nền tảng mua bán hàng tự động: tìm xưởng, báo giá sỉ 4 bậc, duyệt đơn 5 cấp, giữ tiền đến khi khách nhận hàng, và bán trên bất kỳ nền tảng nào (9mua, Shopee, TikTok Shop, Lazada… đều là kênh bán ngang nhau).
 
-Pháp nhân bán hàng: **CÔNG TY CỔ PHẦN NỮ HOÀNG NỘI THẤT**, MST 0316437942.
+Pháp nhân bán hàng: **TAOMUA Co., LTD**, đại diện pháp luật **Lê Thị Huỳnh Như**. MST và địa chỉ đăng ký nhập ở `.env` (`LEGAL_TAX_CODE`, `LEGAL_ADDRESS`).
 
 > Bản thử nghiệm. Sản phẩm, xưởng, phí sàn và dự toán 12 tháng là **dữ liệu giả lập**. Chưa nhận đơn thật.
 
@@ -105,13 +105,16 @@ Nút tổng tắt thì không gì tự làm, trừ phân tích dữ liệu. Khô
 
 **Bảo mật**: đăng nhập bằng email + mật khẩu (scrypt), phiên lưu ở máy chủ, khóa sau 5 lần sai trong 15 phút, phân quyền theo vai trò. Không có PIN chung. Khách không bao giờ thấy giá vốn, phí hay biên. Không có số tài khoản nào trong mã nguồn; thông tin nhận tiền lấy từ biến môi trường.
 
-## Còn chờ
+## Chế độ GIẢ LẬP
 
-- Tài liệu API của Qwen, RynnBrain, Accio (5 endpoint AI đang trả 501, không trả dữ liệu giả).
-- Tài khoản nhận tiền và API ngân hàng (hiện đối soát bằng sao kê CSV; hệ thống không tự chuyển tiền).
-- Danh sách nền tảng cần kết nối API và quyền truy cập của từng nền tảng; phí sàn thật.
+Chưa có tài khoản thật thì mọi dịch vụ ngoài chạy **giả lập** để thấy trọn luồng 95% tự động: trend 20 nguồn, tìm xưởng 1688, camera QC, video 7 ngôn ngữ, tìm bằng ảnh, cổng thanh toán 9PAY / VNPay / Momo / Alipay, QR chuyển khoản, chuyển khoản chi, hóa đơn điện tử, Zalo / email.
+Mọi dữ liệu giả lập có nhãn **GIẢ LẬP** và được ghi ở *Quản trị → Thông báo & kết nối*. Nhập khóa vào `.env` là tự chuyển sang thật (xem *Quản trị → Thông tin cần nhập*).
+Thao tác dính tiền giả lập chỉ chạy khi `SIM_ACTIONS=on` hoặc chạy ở máy thử; khi chạy thật (production) chúng tự tắt.
+
+## Còn chờ chủ dự án nhập
+
+- Pháp nhân TAOMUA Co., LTD: mã số thuế, địa chỉ đăng ký (`LEGAL_TAX_CODE`, `LEGAL_ADDRESS`).
+- Tài khoản nhận tiền (`PAYMENT_BANK_*`, `PAYMENT_BANK_BIN` để QR VietQR thật), API ngân hàng, cổng thanh toán, hóa đơn điện tử VNPT / Viettel.
+- Khóa 1688 / Accio, TikTok, Amazon, Walmart, Google Trends, HeyGen, Ads, GHN / GHTK / J&T, AI (`AI_API_KEY`, `AI_VISION_MODEL`), Zalo OA, SMTP.
 - Danh sách 19 yếu tố TrustScore và trọng số (đang tạm tính 5 yếu tố).
-- Xác thực 2 lớp cho khoản chi lớn và cách nhà đầu tư cùng duyệt Cấp 5 (spec yêu cầu, chưa làm).
-- Bot Telegram thật và chat id người duyệt (đã có code gửi và webhook, chưa thử với bot thật).
-- Máy chủ, tên miền, sao lưu database.
-- Kế toán xác nhận cách ghi nhận tiền đang giữ và VAT đầu vào; luật sư xem điều khoản giữ tiền và bảng so sánh giá.
+- Máy chủ, tên miền, sao lưu database; kế toán và luật sư xem cách ghi nhận tiền đang giữ, VAT, điều khoản giữ tiền.

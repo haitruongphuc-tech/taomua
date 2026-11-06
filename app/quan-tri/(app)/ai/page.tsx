@@ -56,7 +56,15 @@ function Detail({ a }: { a: any }) {
   if (Array.isArray(d.top)) {
     return (
       <ol className="small">{d.top.map((r: any) => <li key={r.sku}>{r.name} — điểm {r.score} (trend {r.trend}, bán 7 ngày {r.ban_7_ngay}{r.ctr ? `, CTR ${r.ctr}%` : ''})</li>)}
-        <div className="muted">{d.nguon}{d.gia_lap ? ' Sản phẩm là dữ liệu giả lập.' : ''}</div></ol>
+        <div className="muted">{d.nguon}</div>
+        {Array.isArray(d.ngoai) && d.ngoai.length > 0 && (
+          <details style={{ marginTop: 6 }}><summary>Trend 20 nguồn ngoài <span className="badge warn">GIẢ LẬP</span> ({d.ngoai.length})</summary>
+            <table className="small"><tbody>{d.ngoai.map((t: any) => (
+              <tr key={t.name}><td><b>{t.name}</b> <span className="muted">{t.zh} · {t.en}</span></td><td>{t.category}</td><td className="num">{t.score}</td>
+                <td className="muted">{(t.sources ?? []).slice(0, 4).join(', ')}{(t.sources ?? []).length > 4 ? '…' : ''}</td></tr>
+            ))}</tbody></table>
+          </details>
+        )}</ol>
     );
   }
   if (Array.isArray(d.san_pham) && d.san_pham[0]?.kich_ban) {

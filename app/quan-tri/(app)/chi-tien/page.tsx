@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { requireUser, actorOf, can } from '@/lib/auth';
 import { decidePayout } from '@/lib/payouts-db';
+import { verifyPassword } from '@/lib/password';
+import { bankTransfer, simActionsAllowed } from '@/lib/money-sim';
+import { connectorEnabled } from '@/lib/connectors';
 import { q, tx } from '@/lib/db';
 import { audit } from '@/lib/audit';
 import { runAction, UserError } from '@/lib/action';
@@ -65,6 +68,20 @@ async function act(fd: FormData) {
         await audit(a, 'payout.paid', 'payout', id, { amount, ref }, c);
         return 'Đã ghi nhận đã chi.';
       }
+      if (op === 'transfer') {
+        if (!can(u, 'payout.pay')) throw new UserError('Chỉ kế toán hoặc CEO chuyển khoản.');
+        if (p.status !== 'DA_DUYET') throw new UserError('Chỉ chuyển khoản đã duyệt.');
+        const blocked = payoutBlock(p.category, ctl);
+        if (blocked) throw new UserError(blocked);
+        if (needsReauth(amount)) {
+          const row = (await c.query('SELECT password_hash FROM users WHERE id=$1', [u.id])).rows[0];
+          if (!row || !verifyPassword(String(fd.get('password') ?? ''), row.password_hash)) throw new UserError(`Khoản từ ${vnd(REAUTH_THRESHOLD)} cần nhập đúng mật khẩu để chuyển.`);
+        }
+        const t = await bankTransfer({ id, amount, payee: p.payee, reason: p.reason });
+        await c.query("UPDATE payouts SET status='DA_CHI', paid_by=$2, paid_ref=$3, paid_at=now(), transfer_mode=$4 WHERE id=$1", [id, u.id, t.ref, t.mode]);
+        await audit(a, 'payout.transfer', 'payout', id, { amount, ref: t.ref, mode: t.mode }, c);
+        return t.mode === 'THAT' ? `Ngân hàng đã nhận lệnh, mã GD ${t.ref}.` : `Chuyển khoản GIẢ LẬP, mã ${t.ref} (không có tiền đi thật).`;
+      }
       throw new UserError('Thao tác không hợp lệ.');
     });
   });
@@ -73,6 +90,8 @@ async function act(fd: FormData) {
 export default async function Payouts({ searchParams }: { searchParams: { ok?: string; loi?: string } }) {
   const u = await requireUser();
   const ctl = await loadControls();
+  const bankLive = connectorEnabled('BANK');
+  const simOk = simActionsAllowed();
   const rows = await q(`SELECT p.*, a.name AS proposer, b.name AS approver, c.name AS payer FROM payouts p
     JOIN users a ON a.id=p.proposed_by LEFT JOIN users b ON b.id=p.approved_by LEFT JOIN users c ON c.id=p.paid_by ORDER BY p.created_at DESC LIMIT 200`);
   const locked = (Object.keys(CAT) as PayoutCategory[]).filter((k) => payoutBlock(k, ctl));
@@ -120,6 +139,12 @@ export default async function Payouts({ searchParams }: { searchParams: { ok?: s
                   <form action={act} className="row"><input type="hidden" name="id" value={p.id} /><input type="hidden" name="op" value="paid" />
                     <input name="paid_ref" placeholder="Mã GD ngân hàng" required style={{ width: 150 }} /><button className="btn sm">Đã chi</button></form>
                 )}
+                {p.status === 'DA_DUYET' && can(u, 'payout.pay') && (bankLive || simOk) && (
+                  <form action={act} className="row" style={{ marginTop: 4 }}><input type="hidden" name="id" value={p.id} /><input type="hidden" name="op" value="transfer" />
+                    {needsReauth(Number(p.amount)) && <input name="password" type="password" placeholder="Mật khẩu" autoComplete="current-password" style={{ width: 110 }} />}
+                    <button className="btn blue sm">{bankLive ? 'Chuyển qua ngân hàng' : 'Chuyển khoản (GIẢ LẬP)'}</button></form>
+                )}
+                {p.transfer_mode === 'GIA_LAP' && <div className="small"><span className="badge warn">GIẢ LẬP</span></div>}
               </td>
             </tr>
           );

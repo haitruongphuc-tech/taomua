@@ -40,12 +40,13 @@ describe('7 AI agent', () => {
     expect(quote.status).toBe('DA_BAO_GIA');                            // RYN-SALES tự báo giá Cấp 1 (100 × 21.000 < 5 triệu)
     expect(Number(quote.quote_price)).toBe(100 * 21000);
     const kinds = (await q("SELECT kind FROM agent_actions WHERE status='DE_XUAT'")).map((x) => x.kind).sort();
-    expect(kinds).toEqual(['PRICE_CHANGE', 'SOURCING_CHOICE']);
+    expect(kinds).toEqual(expect.arrayContaining(['PRICE_CHANGE', 'SOURCING_CHOICE']));
+    expect(kinds.every((k) => k === 'PRICE_CHANGE' || k === 'SOURCING_CHOICE')).toBe(true);
     // Xưởng chính kém → AI tự mở yêu cầu tìm xưởng, đề xuất xưởng tốt (xưởng kém rẻ hơn nhưng không đạt Trust/lỗi), CEO quyết định (Cấp 3).
     const sr = await one("SELECT status, result FROM sourcing_requests WHERE product_id=$1", [cheap.id]);
     expect(sr.status).toBe('DA_DE_XUAT');
     expect(sr.result.recommendation.supplier_id).toBe(good.id);
-    expect((await one("SELECT level FROM agent_actions WHERE kind='SOURCING_CHOICE'")).level).toBe(3);
+    expect((await q("SELECT level FROM agent_actions WHERE kind='SOURCING_CHOICE'")).every((r) => r.level === 3)).toBe(true);
     expect(await one("SELECT 1 AS ok FROM agent_actions WHERE agent='RYN-NEGO' AND status='TIN'")).toBeTruthy();
     expect(await one('SELECT 1 AS ok FROM product_cost_history WHERE product_id=$1', [cheap.id])).toBeTruthy();
   });
@@ -68,7 +69,8 @@ describe('7 AI agent', () => {
   });
 
   it('chọn xưởng: chỉ CEO; duyệt thì đổi xưởng chính + giá vốn theo báo giá', async () => {
-    const a = await one("SELECT id FROM agent_actions WHERE kind='SOURCING_CHOICE' AND status='DE_XUAT'");
+    const sr0 = await one('SELECT id FROM sourcing_requests WHERE product_id=$1', [cheap.id]);
+    const a = await one("SELECT id FROM agent_actions WHERE kind='SOURCING_CHOICE' AND status='DE_XUAT' AND entity_id=$1", [sr0.id]);
     await expect(decideAgentAction(a.id, { id: lead.id, role: 'TRUONG_NHOM', label: 'Lead' }, 'approve')).rejects.toThrow(/CEO/);
     await decideAgentAction(a.id, { id: ceo.id, role: 'CEO', label: 'CEO' }, 'approve');
     const p = await one('SELECT supplier_id, cost FROM products WHERE id=$1', [cheap.id]);
@@ -82,13 +84,15 @@ describe('7 AI agent', () => {
     await runAgents('LICH', sys);
     expect((await one('SELECT status FROM rfqs WHERE id=$1', [id])).status).toBe('DANG_TIM_XUONG');
     const sr = await one('SELECT id, status, result FROM sourcing_requests WHERE rfq_id=$1', [id]);
-    expect(sr.status).toBe('KHONG_TIM_THAY');
-    expect(sr.result.inquiry.zh).toContain('200');
-    await q(`INSERT INTO supplier_offers(supplier_id, product_text, category, unit_cost, moq, lead_time_days, verified) VALUES ($1,'Ly giữ nhiệt inox 900ml','Gia dụng',40000,100,7,true)`, [good.id]);
+    // Chưa có báo giá trong hệ thống → AI tự tìm trên 1688 (GIẢ LẬP); không thấy xưởng đạt thì soạn tin hỏi giá.
+    expect(sr.result.tim_ngoai.mode).toBe('GIA_LAP');
+    if (sr.status === 'KHONG_TIM_THAY') expect(sr.result.inquiry.zh).toContain('200');
+    const off = await one(`INSERT INTO supplier_offers(supplier_id, product_text, category, unit_cost, moq, lead_time_days, verified) VALUES ($1,'Ly giữ nhiệt inox 900ml','Gia dụng',40000,100,7,true) RETURNING id`, [good.id]);
     await runAgents('LICH', sys, ['RYN-SUPPLY']);
-    const a = await one("SELECT id FROM agent_actions WHERE kind='SOURCING_CHOICE' AND status='DE_XUAT' AND entity_id=$1", [sr.id]);
-    expect(a).toBeTruthy();
-    await decideAgentAction(a.id, { id: ceo.id, role: 'CEO', label: 'CEO' }, 'approve');
+    expect(await one("SELECT 1 AS x FROM agent_actions WHERE kind='SOURCING_CHOICE' AND status='DE_XUAT' AND entity_id=$1", [sr.id])).toBeTruthy();
+    // CEO chọn báo giá thật (xưởng tốt) trên trang Tìm xưởng
+    const { chooseOffer } = await import('@/lib/sourcing-db');
+    await chooseOffer(sr.id, off.id, ceo.id);
     const rfq = await one('SELECT status, quote_price FROM rfqs WHERE id=$1', [id]);
     expect(rfq.status).toBe('DA_BAO_GIA');
     const unit = Number(rfq.quote_price) / 200;

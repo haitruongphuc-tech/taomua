@@ -10,7 +10,9 @@ import { loadControls } from '../controls';
 import type { Controls } from '../payouts';
 import { aiEnabled, translate7, classify, chat } from '../ai';
 import { listingMargin } from '../channels';
-import { createSourcingRequest, evaluateRequest, guessCategory } from '../sourcing-db';
+import { createSourcingRequest, evaluateRequest, guessCategory, searchExternalSuppliers } from '../sourcing-db';
+import { simTrends, logConnector } from '../sim';
+import { textOverlap } from '../sourcing';
 import { fold } from '../sourcing';
 import { adDecision, adMetrics, SCALE_STEP } from '../marketing';
 import { cheapest, guessZone, ZONE_TEXT } from '../logistics';
@@ -65,11 +67,30 @@ async function trend(ctx: Ctx): Promise<Finding[]> {
   const ranked = rows.map((r) => ({
     ...r, score: Math.round(0.5 * r.trend_score + 30 * (r.qty7 / maxQty) + 20 * Math.min(1, Number(r.latr_ctr ?? 0) / 6)),
   })).sort((a, b) => b.score - a.score);
+  // 20 nguồn trend ngoài (TikTok, Douyin, 1688, Amazon, Walmart, Shein, Temu, Google Trends, Shopee...): GIẢ LẬP cho tới khi có khóa + bộ chuyển đổi.
+  const cats = (await q('SELECT DISTINCT unnest(categories) AS c FROM suppliers UNION SELECT DISTINCT category FROM products')).map((x) => x.c as string);
+  const external = simTrends(cats, day(ctx.now), 50);
+  await logConnector('TREND_20_NGUON', 'GIA_LAP', { ngay: day(ctx.now), nganh: cats }, { so_trend: external.length, top: external.slice(0, 5).map((t) => `${t.name} ${t.score}`) });
   const out: Finding[] = [{
     agent: 'RYN-TREND', kind: 'NOTE', title: `Bảng xếp hạng hàng hot ${day(ctx.now)}`, dedupe: `trend:${day(ctx.now)}`,
     detail: { top: ranked.slice(0, 10).map((r) => ({ sku: r.sku, name: r.name, score: r.score, trend: r.trend_score, ban_7_ngay: r.qty7, ctr: r.latr_ctr })),
-      nguon: 'Dữ liệu trong hệ thống. Nguồn ngoài (TikTok, 1688, Amazon, Google Trends) chờ API.', gia_lap: rows.some((r) => r.is_simulated) },
+      ngoai: external.slice(0, 15).map((t) => ({ name: t.name, en: t.name_en, zh: t.name_zh, category: t.category, score: t.score, sources: t.sources, bien_du_kien: t.bien_du_kien })),
+      nguon: 'Trong hệ thống: điểm trend, bán 7 ngày, CTR. Ngoài: 20 nguồn (GIẢ LẬP tới khi nhập khóa).', gia_lap: true },
   }];
+  // Trend ngoài điểm cao chưa có trong danh mục → AI tự mở yêu cầu tìm xưởng (luồng TREND → SUPPLY → PRICE → CEO duyệt).
+  const names = rows.map((r) => r.name as string);
+  let opened = Number((await q("SELECT count(*)::int AS n FROM sourcing_requests WHERE reason LIKE 'RYN-TREND%' AND created_at >= date_trunc('day', now())"))[0].n); // tối đa 3 yêu cầu mới mỗi ngày
+  for (const t of external) {
+    if (opened >= 3 || t.score < 90) break;
+    if (names.some((n) => textOverlap(t.name, n) >= 0.6)) continue;
+    const r = await tx((c) => createSourcingRequest(c, { text: t.name, category: t.category, quantity: 100, targetUnitPrice: null,
+      reason: `RYN-TREND: trend ${t.score}/100 từ ${t.sources.slice(0, 3).join(', ')} (GIẢ LẬP)` }));
+    if (r.created) {
+      opened++;
+      out.push({ agent: 'RYN-TREND', kind: 'NOTE', entity: 'sourcing', entityId: r.id, dedupe: `trend-new:${t.name}`,
+        title: `Trend mới ${t.name} (${t.name_zh}) điểm ${t.score} — đã mở yêu cầu tìm xưởng (nguồn GIẢ LẬP)` });
+    }
+  }
   for (const r of ranked) {
     if (r.trend_score >= 85 && r.latr_test_qty == null && r.latr_ctr == null) {
       out.push({ agent: 'RYN-TREND', kind: 'NOTE', severity: 'INFO', title: `Nên bán thử 50–100 cái: ${r.name} (trend ${r.trend_score})`,
@@ -127,7 +148,11 @@ async function supply(ctx: Ctx): Promise<Finding[]> {
   // Chấm điểm mọi yêu cầu tìm xưởng đang mở (từ sản phẩm, từ RFQ, hoặc người tạo trên trang Tìm xưởng).
   const open = await q("SELECT id FROM sourcing_requests WHERE status IN ('MO','DA_DE_XUAT','KHONG_TIM_THAY') ORDER BY created_at LIMIT 100");
   for (const { id } of open) {
-    const ev = await tx((c) => evaluateRequest(c, id));
+    let ev = await tx((c) => evaluateRequest(c, id));
+    if (!ev.result.recommendation && !ev.request.result?.tim_ngoai) {
+      const n = await tx((c) => searchExternalSuppliers(c, id));
+      if (n > 0) ev = await tx((c) => evaluateRequest(c, id));
+    }
     const r = ev.request;
     const rec = ev.result.recommendation;
     if (rec) {

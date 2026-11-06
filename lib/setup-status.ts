@@ -1,7 +1,8 @@
 // Danh sách thông tin còn thiếu / đang giả lập, tính trực tiếp từ cấu hình và database mỗi lần mở trang.
 // THIEU: chưa có, cần nhập sau. GIA_LAP: đang chạy bằng số giả lập, cần sửa sau. CHUA_LAM: spec có nhưng chờ nhà cung cấp / quyết định. OK: đã có.
 import { q } from './db';
-import { CONNECTORS, connectorEnabled } from './connectors';
+import { LEGAL, legalComplete } from './legal';
+import { CONNECTORS, connectorEnabled, keysButNoAdapter } from './connectors';
 
 export type SetupStatus = 'OK' | 'THIEU' | 'GIA_LAP' | 'CHUA_LAM';
 export type SetupItem = { group: string; label: string; status: SetupStatus; detail: string; where: string; href?: string };
@@ -39,6 +40,8 @@ export async function setupItems(): Promise<SetupItem[]> {
 
   return [
     // --- Bắt buộc trước khi nhận đơn và tiền thật ---
+    { group: 'Trước khi bán thật', label: 'Pháp nhân TAOMUA Co., LTD: MST và địa chỉ đăng ký', status: legalComplete() ? 'OK' : 'THIEU',
+      where: 'LEGAL_TAX_CODE, LEGAL_ADDRESS', detail: `Đại diện pháp luật ${LEGAL.representative}. MST: ${LEGAL.taxCode}; địa chỉ: ${LEGAL.address}. Hiện trên chân trang, hóa đơn, sổ bán hàng.` },
     { group: 'Trước khi bán thật', label: 'Không bán hàng giả lập', status: simLive ? 'THIEU' : 'OK', href: '/quan-tri/san-pham', where: 'Quản trị → Sản phẩm',
       detail: simLive ? `${simLive} sản phẩm giả lập đang hiển thị bán. Sửa số thật (giá vốn, giá bán, xưởng) rồi bỏ ô "Dữ liệu giả lập", hoặc ẩn sản phẩm.` : 'Không còn sản phẩm giả lập đang bán.' },
     { group: 'Trước khi bán thật', label: 'Xưởng thật cho hàng đang bán', status: liveNoRealSupplier ? 'THIEU' : 'OK', href: '/quan-tri/tim-xuong', where: 'Quản trị → Tìm xưởng (AI)',
@@ -94,8 +97,8 @@ export async function setupItems(): Promise<SetupItem[]> {
 
     // --- Chờ nhà cung cấp / quyết định ---
     // Cổng kết nối dịch vụ ngoài (lib/connectors.ts): tự đổi sang 'Đã có' khi nhập đủ khóa trong .env.
-    ...CONNECTORS.map((c): SetupItem => ({ group: 'Kết nối dịch vụ ngoài', label: c.name, status: connectorEnabled(c.key) ? 'OK' : 'CHUA_LAM', where: c.env.join(', '),
-      detail: `${c.note} Dùng cho ${c.used_by}.${connectorEnabled(c.key) ? '' : ' Chưa có khóa: đang chạy bằng dữ liệu nội bộ / nhập tay.'}` })),
+    ...CONNECTORS.map((c): SetupItem => ({ group: 'Kết nối dịch vụ ngoài', label: c.name, status: connectorEnabled(c.key) ? 'OK' : 'GIA_LAP', where: c.env.join(', '),
+      detail: `${c.note} Dùng cho ${c.used_by}.${connectorEnabled(c.key) ? ' Đang chạy THẬT.' : keysButNoAdapter(c.key) ? ' Đã có khóa, cần viết bộ chuyển đổi theo tài liệu API; tạm chạy GIẢ LẬP.' : ' Đang chạy GIẢ LẬP (số mẫu, có nhãn) cho tới khi nhập khóa.'}` })),
     { group: 'Cấu hình .env', label: 'Báo duyệt qua Zalo OA', status: env('ZALO_OA_ACCESS_TOKEN', 'ZALO_CEO_USER_ID') ? 'OK' : 'THIEU', where: 'ZALO_OA_ACCESS_TOKEN, ZALO_CEO_USER_ID',
       detail: 'Kênh phụ của One-Tap: tin Zalo kèm link mở Duyệt nhanh. Tạo OA tại oa.zalo.me.' },
     { group: 'Cấu hình .env', label: 'Báo duyệt qua email', status: env('SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'APPROVAL_EMAIL_TO') ? 'OK' : 'THIEU', where: 'SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, APPROVAL_EMAIL_TO',

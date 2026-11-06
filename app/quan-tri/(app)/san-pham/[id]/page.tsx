@@ -9,6 +9,7 @@ import { UserError, runAction } from '@/lib/action';
 import { vnd, dt } from '@/lib/format';
 import ProductForm from '../ProductForm';
 import TraceQr from '@/components/TraceQr';
+import { recordQc } from '@/lib/qc';
 import Flash from '@/components/Flash';
 
 async function update(fd: FormData) {
@@ -51,6 +52,16 @@ async function comparison(fd: FormData) {
   });
 }
 
+async function qc(fd: FormData) {
+  'use server';
+  const u = await requireUser('orders.fulfil');
+  const id = String(fd.get('id'));
+  await runAction(`/quan-tri/san-pham/${id}`, async () => {
+    const r = await recordQc(id, { checked: Number(fd.get('checked')) || undefined, defects: Number(fd.get('defects')) || 0, imageUrl: String(fd.get('image_url') ?? '') || undefined }, actorOf(u));
+    return `QC ${r.qc_pass}% (lỗi ${r.defect_rate}%): ${r.passed ? 'ĐẠT' : 'KHÔNG ĐẠT'}${r.gia_lap ? ' — camera GIẢ LẬP' : ''}.`;
+  });
+}
+
 export default async function EditProduct({ params, searchParams }: { params: { id: string }; searchParams: { ok?: string; loi?: string } }) {
   const u = await requireUser('orders.view');
   if (!isUuid(params.id)) notFound();
@@ -65,6 +76,16 @@ export default async function EditProduct({ params, searchParams }: { params: { 
       <div className="row spread"><h1 style={{ margin: 0 }}>{p.image_emoji} {p.name}</h1>{p.published && <Link href={`/san-pham/${p.id}`} className="small">Xem trên cửa hàng →</Link>}</div>
       <Flash sp={searchParams} />
       {edit ? <ProductForm p={p} suppliers={suppliers} action={update} /> : <p className="muted">Bạn chỉ có quyền xem.</p>}
+      <section className="card stack small">
+        <h2 style={{ margin: 0 }}>Kiểm chất lượng (RynnBrain QC) · hiện {p.rynn_brain_pass != null ? `${p.rynn_brain_pass}%` : 'chưa kiểm'}</h2>
+        <form action={qc} className="form-grid"><input type="hidden" name="id" value={p.id} />
+          <label className="field">Số đã kiểm<input name="checked" type="number" min={1} /></label>
+          <label className="field">Số lỗi<input name="defects" type="number" min={0} /></label>
+          <label className="field">Hoặc link ảnh lô hàng (camera AI)<input name="image_url" type="url" placeholder="https://..." /></label>
+          <div style={{ alignSelf: 'end' }}><button className="btn sm">Ghi QC</button></div>
+        </form>
+        <div className="muted">Đạt khi lỗi ≤ 2%. Chưa có khóa camera thì chấm ảnh ở chế độ GIẢ LẬP.</div>
+      </section>
       {p.published && (
         <section className="card row" style={{ gap: 16, alignItems: 'center' }}>
           <TraceQr sku={p.sku} size={120} />

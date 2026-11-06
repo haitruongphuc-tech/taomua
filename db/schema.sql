@@ -526,3 +526,30 @@ CREATE TRIGGER products_price_history AFTER INSERT OR UPDATE ON products FOR EAC
 INSERT INTO product_price_history(product_id, price_10, price_50, price_100, price_500, recorded_at)
   SELECT p.id, p.price_taomua_10, p.price_taomua_50, p.price_taomua_100, p.price_taomua_500, p.created_at FROM products p
   WHERE NOT EXISTS (SELECT 1 FROM product_price_history h WHERE h.product_id=p.id);
+
+-- ===== Hộp thư thông báo: mọi tin gửi CEO / khách qua Zalo OA, email, Telegram. Chưa cấu hình kênh thì ghi GIA_LAP (không gửi). =====
+CREATE TABLE IF NOT EXISTS notification_log (
+  id         BIGSERIAL PRIMARY KEY,
+  channel    TEXT NOT NULL,
+  recipient  TEXT NOT NULL DEFAULT '',
+  subject    TEXT NOT NULL DEFAULT '',
+  body       TEXT NOT NULL,
+  mode       TEXT NOT NULL CHECK (mode IN ('THAT','GIA_LAP')),
+  ok         BOOLEAN NOT NULL DEFAULT TRUE,
+  error      TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS notification_log_at ON notification_log(created_at DESC);
+
+-- ===== Kết quả dịch vụ ngoài chạy giả lập (trend 20 nguồn, tìm xưởng 1688, camera QC, video, hóa đơn điện tử, chuyển khoản) =====
+CREATE TABLE IF NOT EXISTS connector_runs (
+  id         BIGSERIAL PRIMARY KEY,
+  connector  TEXT NOT NULL,
+  mode       TEXT NOT NULL CHECK (mode IN ('THAT','GIA_LAP')),
+  input      JSONB NOT NULL DEFAULT '{}',
+  output     JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS connector_runs_at ON connector_runs(connector, created_at DESC);
+ALTER TABLE payouts ADD COLUMN IF NOT EXISTS transfer_mode TEXT;      -- THAT / GIA_LAP khi chuyển qua API ngân hàng
+ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS invoice_mode TEXT; -- THAT / GIA_LAP khi xuất hóa đơn qua API

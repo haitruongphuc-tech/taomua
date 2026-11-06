@@ -38,7 +38,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <main className="wrap page">{children}</main>
       <footer className="site">
         <div className="wrap stack">
-          <div className="site-footer-logo"><Logo variant="full" size={72} /><div><strong>{LEGAL.name}</strong> · MST {LEGAL.taxCode}<div className="slogan-list">{Object.values(SLOGANS).join(' · ')}</div></div></div>
+          <div className="site-footer-logo"><Logo variant="full" size={72} /><div><strong>{LEGAL.name}</strong> ({LEGAL.nameVi}) · MST {LEGAL.taxCode} · Đại diện pháp luật: {LEGAL.representative} · Địa chỉ: {LEGAL.address}<div className="slogan-list">{Object.values(SLOGANS).join(' · ')}</div></div></div>
           <div>Giá đã gồm VAT. Tiền của bạn được giữ đến khi bạn xác nhận đã nhận hàng.</div>
           {sim > 0 && <div>Bản thử nghiệm: {sim} sản phẩm đang là dữ liệu giả lập, chưa nhận đơn thật cho các sản phẩm này.</div>}
           <div><Link href="/bao-loi">Báo lỗi / Report a problem</Link> · <Link href="/don-hang">Tra cứu đơn / Track order</Link></div>

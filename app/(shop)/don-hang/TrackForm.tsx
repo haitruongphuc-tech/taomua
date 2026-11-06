@@ -1,6 +1,6 @@
 'use client';
 import { useFormState, useFormStatus } from 'react-dom';
-import { lookup, confirmReceived, type TrackState } from './actions';
+import { lookup, confirmReceived, simGatewayPay, type TrackState } from './actions';
 
 const fmt = (n: number) => Number(n).toLocaleString('vi-VN') + ' đ';
 const LABEL: Record<string, string> = {
@@ -17,7 +17,8 @@ function Submit({ children, className = 'btn' }: { children: React.ReactNode; cl
 export default function TrackForm({ initialCode }: { initialCode: string }) {
   const [s, look] = useFormState<TrackState, FormData>(lookup, { code: initialCode });
   const [s2, confirm] = useFormState<TrackState, FormData>(confirmReceived, {});
-  const st = s2.order ? s2 : s;
+  const [s3, pay] = useFormState<TrackState, FormData>(simGatewayPay, {});
+  const st = s3.order ? s3 : s2.order ? s2 : s;
   const o = st.order;
   return (
     <div className="stack">
@@ -50,6 +51,22 @@ export default function TrackForm({ initialCode }: { initialCode: string }) {
           {o.status === 'CHO_THANH_TOAN' && (st.payment
             ? <div className="alert info">Chuyển khoản / Bank transfer <b>{fmt(o.amount_due)}</b> tới {st.payment.bank} · STK <b className="mono">{st.payment.no}</b> · {st.payment.name}{st.payment.swift ? <> · SWIFT <b className="mono">{st.payment.swift}</b></> : null}. Nội dung / Reference: <b className="mono">{o.code}</b>. Chuyển đúng số tiền để hệ thống tự khớp. / Send the exact amount.</div>
             : <div className="alert warn">taomua sẽ liên hệ để gửi thông tin thanh toán.</div>)}
+          {st.qr && (
+            <div className="row" style={{ gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              {st.qr.mode === 'THAT'
+                ? <img src={st.qr.img} alt="QR chuyển khoản VietQR" width={180} height={180} />
+                : <div style={{ width: 180 }} dangerouslySetInnerHTML={{ __html: st.qr.svg ?? '' }} />}
+              <div className="small">Quét QR bằng app ngân hàng: số tiền và nội dung <b className="mono">{o.code}</b> điền sẵn.
+                {st.qr.mode === 'GIA_LAP' && <div><span className="badge warn">GIẢ LẬP</span> chưa có tài khoản nhận tiền thật — không chuyển tiền vào QR này.</div>}</div>
+            </div>
+          )}
+          {st.simPay && (
+            <form action={pay} className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+              <input type="hidden" name="code" value={o.code} /><input type="hidden" name="phone" value={st.phone ?? ''} />
+              <span className="small">Cổng thanh toán <span className="badge warn">GIẢ LẬP</span>:</span>
+              {['9PAY', 'VNPAY', 'MOMO', 'ALIPAY'].map((m) => <button key={m} className="btn secondary sm" name="method" value={m}>{m}</button>)}
+            </form>
+          )}
           {o.carrier && <div>Vận chuyển: {o.carrier} · mã vận đơn <span className="mono">{o.tracking_no}</span></div>}
           {o.trade_assurance_status === 'HOLD' && ['DANG_GIAO', 'DA_GIAO'].includes(o.status) && (
             <form action={confirm} className="stack">

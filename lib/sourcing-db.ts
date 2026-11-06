@@ -1,6 +1,9 @@
 import type { PoolClient } from 'pg';
 import { pool, tx } from './db';
 import { UserError } from './action';
+import { sim1688Suppliers, logConnector } from './sim';
+import { trustScore } from './trust';
+import { connectorMode } from './connectors';
 import { rankCandidates, recommend, inquiryMessage, textOverlap, fold, type Candidate, type Need } from './sourcing';
 
 type Db = PoolClient | typeof pool;
@@ -36,7 +39,9 @@ export async function createSourcingRequest(c: Db, r: {
   targetUnitPrice?: number | null; country?: string; reason: string; createdBy?: string | null;
 }): Promise<{ id: string; created: boolean }> {
   const existing = (await c.query(`SELECT id FROM sourcing_requests WHERE status IN ('MO','DA_DE_XUAT','KHONG_TIM_THAY')
-    AND ((product_id IS NOT NULL AND product_id=$1) OR (rfq_id IS NOT NULL AND rfq_id=$2))`, [r.productId ?? null, r.rfqId ?? null])).rows[0];
+    AND ((product_id IS NOT NULL AND product_id=$1) OR (rfq_id IS NOT NULL AND rfq_id=$2)
+      OR ($1::uuid IS NULL AND $2::uuid IS NULL AND product_id IS NULL AND rfq_id IS NULL AND lower(product_text)=lower($3)))`,
+    [r.productId ?? null, r.rfqId ?? null, r.text.slice(0, 500)])).rows[0];
   if (existing) return { id: existing.id, created: false };
   const seq = (await c.query("SELECT nextval('sourcing_code_seq') AS n")).rows[0].n;
   const row = (await c.query(`INSERT INTO sourcing_requests(code, product_id, rfq_id, product_text, category, quantity, target_unit_price, ship_country, reason, created_by)
@@ -67,6 +72,7 @@ export async function evaluateRequest(c: Db, id: string) {
       unit_price: rec.unitPrice, total: rec.total, margin: rec.margin, test_qty: rec.testQty,
       backups: rec.backups.map((b) => ({ supplier_id: b.supplier.id, supplier: b.supplier.name, offer_id: b.offer?.id, landed: b.landed })),
     } : null,
+    tim_ngoai: r.result?.tim_ngoai ?? null,
     inquiry: rec ? null : inquiryMessage({ productVi: r.product_text, productZh: r.name_i18n?.zh, quantity: r.quantity, country: r.ship_country }),
   };
   const status = rec ? 'DA_DE_XUAT' : 'KHONG_TIM_THAY';
@@ -109,3 +115,24 @@ export async function chooseOfferTx(c: PoolClient, requestId: string, offerId: s
 }
 
 export const chooseOffer = (requestId: string, offerId: string, userId: string) => tx((c) => chooseOfferTx(c, requestId, offerId, userId));
+
+/** RYN-SUPPLY tìm thêm xưởng trên 1688 / Accio cho một yêu cầu (spec: 50 xưởng mỗi sản phẩm). Chưa có khóa thì GIẢ LẬP:
+ *  thêm xưởng + báo giá mẫu gắn nhãn [GIẢ LẬP] và is_simulated để thấy trọn luồng AI đề xuất → CEO chọn. Trả số xưởng thêm. */
+export async function searchExternalSuppliers(c: PoolClient, requestId: string): Promise<number> {
+  const r = (await c.query('SELECT s.*, p.cost AS p_cost FROM sourcing_requests s LEFT JOIN products p ON p.id=s.product_id WHERE s.id=$1 FOR UPDATE OF s', [requestId])).rows[0];
+  if (!r || r.result?.tim_ngoai) return 0;
+  const category = r.category ?? 'Khác';
+  const found = sim1688Suppliers(r.product_text, category, r.p_cost ? Number(r.p_cost) : null, 6);
+  for (const x of found) {
+    const trust = trustScore({ response_time_sec: x.response_time_sec, verified_cert: x.verified_cert, defect_rate: x.defect_rate, on_time_rate: 0.9, inventory_sync: x.source === '1688' }).score;
+    const sup = (await c.query(`INSERT INTO suppliers(name, source, country, trust_score, response_time_sec, defect_rate, on_time_rate, verified_cert, inventory_sync,
+        moq, categories, lead_time_days, ships_international, is_simulated) VALUES ($1,$2,$3,$4,$5,$6,0.9,$7,$8,$9,$10,$11,$12,true) RETURNING id`,
+      [x.name, x.source, x.country, trust, x.response_time_sec, x.defect_rate, x.verified_cert, x.source === '1688', x.moq, [category], x.lead_time_days, x.ships_international])).rows[0];
+    await c.query(`INSERT INTO supplier_offers(supplier_id, product_id, product_text, category, unit_cost, currency, moq, lead_time_days, source, is_simulated, verified)
+      VALUES ($1,$2,$3,$4,$5,'VND',$6,$7,'API',true,false)`, [sup.id, r.product_id, r.product_text, category, x.unit_cost, x.moq, x.lead_time_days]);
+  }
+  const mode = connectorMode('1688');
+  await c.query("UPDATE sourcing_requests SET result = result || $2 WHERE id=$1", [requestId, JSON.stringify({ tim_ngoai: { at: new Date().toISOString(), mode, so_xuong: found.length } })]);
+  await logConnector('1688', 'GIA_LAP', { yeu_cau: r.code, hang: r.product_text, nganh: category }, { so_xuong: found.length, xuong: found.map((x) => `${x.name} ${x.unit_cost}đ MOQ ${x.moq}`) });
+  return found.length;
+}
