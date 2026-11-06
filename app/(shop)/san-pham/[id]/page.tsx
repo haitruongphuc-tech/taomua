@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getProduct, priceComparisons } from '@/lib/catalog';
 import AddToCart from '@/components/AddToCart';
 import TraceQr from '@/components/TraceQr';
+import PriceHistory from '@/components/PriceHistory';
 import { Trust } from '@/components/ProductCard';
 import { vnd, dt } from '@/lib/format';
 
@@ -48,6 +49,8 @@ export default async function ProductPage({ params }: { params: { id: string } }
           <p className="muted small">Hàng lỗi được hoàn tiền từ khoản đang giữ.</p>
         </section>
       </div>
+
+      <PriceHistory productId={p.id} />
 
       <section className="card stack">
         <h2>So sánh giá</h2>

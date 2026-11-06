@@ -13,10 +13,10 @@ export const PAYOUT_CATEGORIES = {
 export type PayoutCategory = keyof typeof PAYOUT_CATEGORIES;
 
 export type ControlKey =
-  | 'AI_AUTO' | 'NAP_AI' | 'NAP_ADS' | 'TAM_UNG_SHIP' | 'MUA_MAU_LATR' | 'DAT_COC_XUONG' | 'NOP_THUE' | 'KHOA_NHAP_MOI';
+  | 'AI_AUTO' | 'NAP_AI' | 'NAP_ADS' | 'TAM_UNG_SHIP' | 'MUA_MAU_LATR' | 'DAT_COC_XUONG' | 'NOP_THUE' | 'KHOA_NHAP_MOI' | 'CANH_GIAM_GIA';
 export type Controls = Record<ControlKey, boolean>;
 
-/** 8 nút bật/tắt được + 1 nút cố định (Trade Assurance) = 9 nút theo spec. */
+/** 9 nút bật/tắt được + 1 nút cố định (Trade Assurance), theo spec PAYMENT_MANAGEMENT và ALGORITHM mục 7 (nút canh mua giảm giá). */
 export const CONTROLS: { key: ControlKey; label: string; on: string; off: string; when: string; default: boolean }[] = [
   { key: 'AI_AUTO', label: 'Nút tổng: tự động duyệt Cấp 1', default: true,
     on: 'Đơn hàng và khoản chi dưới 5 triệu được duyệt tự động.',
@@ -31,6 +31,9 @@ export const CONTROLS: { key: ControlKey; label: string; on: string; off: string
   { key: 'KHOA_NHAP_MOI', label: 'Khóa nhập hàng mới', default: false,
     on: 'Khóa đặt cọc xưởng và mua mẫu, chỉ thu hồi công nợ.', off: 'Nhập hàng bình thường.',
     when: 'Bật khi biên an toàn dưới 20%.' },
+  { key: 'CANH_GIAM_GIA', label: 'Canh mua giảm giá', default: true,
+    on: 'AI canh báo giá xưởng thấp hơn ≥ 10% giá vốn (mở yêu cầu đổi xưởng), đối thủ giảm giá (giảm 2%, giữ biên ≥ 15%), khách mua 500 cái (đàm phán lại giảm 5–10%).',
+    off: 'AI không canh giảm giá.', when: 'Tắt khi muốn giữ nguyên giá và xưởng.' },
 ];
 export const TRADE_ASSURANCE_NOTE = 'Luôn bật: tiền khách được giữ đến khi khách xác nhận nhận hàng. Không có nút tắt để bảo vệ khách sỉ.';
 

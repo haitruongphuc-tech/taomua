@@ -1,4 +1,5 @@
 import { q, one } from './db';
+import { parseQuery, matchesWords } from './nlsearch';
 
 // Chỉ các cột khách được xem. Không bao giờ trả giá vốn, phí, VAT đầu vào hay biên.
 const PUBLIC_COLS = `p.id, p.sku, p.name, p.category, p.description, p.image_emoji, p.trend_score, p.moq, p.stock_note,
@@ -12,13 +13,17 @@ export type PublicProduct = {
   trust_score: number | null; verified_cert: boolean | null;
 };
 
-export async function listProducts(opts: { q?: string; category?: string; minTrust?: number; maxPrice?: number; sort?: string }) {
+/** Danh mục công khai. q là câu tìm kiếm tự nhiên (lib/nlsearch.ts): hiểu "dưới 50k", "hot", "rẻ nhất", ngành hàng, chữ không dấu. */
+export async function listProducts(opts: { q?: string; category?: string; minTrust?: number; maxPrice?: number; sort?: string }): Promise<PublicProduct[]> {
+  if (opts.q) {
+    const cats = await categories();
+    const pq = parseQuery(opts.q, cats);
+    const rows: PublicProduct[] = await listProducts({ category: opts.category || pq.category, minTrust: opts.minTrust || pq.minTrust,
+      maxPrice: opts.maxPrice || pq.maxPrice, sort: opts.sort || (pq.sort === 'hot' ? undefined : pq.sort) });
+    return rows.filter((p) => matchesWords(p, pq.words));
+  }
   const where = ['p.published'];
   const params: unknown[] = [];
-  if (opts.q) {
-    params.push(`%${opts.q}%`);
-    where.push(`(p.name ILIKE $${params.length} OR p.category ILIKE $${params.length} OR p.description ILIKE $${params.length})`);
-  }
   if (opts.category) { params.push(opts.category); where.push(`p.category = $${params.length}`); }
   if (opts.minTrust) { params.push(opts.minTrust); where.push(`s.trust_score >= $${params.length}`); }
   if (opts.maxPrice) { params.push(opts.maxPrice); where.push(`p.price_taomua_10 <= $${params.length}`); }

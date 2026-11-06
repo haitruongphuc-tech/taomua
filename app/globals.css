@@ -154,3 +154,12 @@ footer.site { border-top: 1px solid var(--line); background: #fff; padding: 20px
 .chat-msg.me { background: var(--blue); color: #fff; align-self: flex-end; }
 .chat-input { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); background: #fff; }
 .chat-input input { flex: 1; }
+
+/* Trợ lý tìm hàng AI, thông báo Canvas */
+.ai-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #fff; border-radius: 12px; padding: 8px; }
+.ai-search input { flex: 1; min-width: 180px; border: 0; font-size: 1rem; }
+.ai-search-icon { font-size: 1.3rem; }
+.ai-search-examples { width: 100%; color: var(--muted); }
+.linkish { background: none; border: 0; color: var(--blue); cursor: pointer; padding: 0 6px; text-decoration: underline; font: inherit; }
+.btn.on { background: var(--bad); color: #fff; }
+.announce { background: #3b1e9a; color: #fff; text-align: center; font-size: .9rem; padding: 6px 0; }

@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { listProducts, categories } from '@/lib/catalog';
 import ProductCard from '@/components/ProductCard';
+import AiSearch from '@/components/AiSearch';
+import ProfitCalc from '@/components/ProfitCalc';
+import { parseQuery } from '@/lib/nlsearch';
+import { siteContent } from '@/lib/site';
+import { q } from '@/lib/db';
+import { vnd } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +20,12 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
     listProducts({ q: qtext, category: searchParams.dm, minTrust, maxPrice, sort: searchParams.sort }),
     categories(),
   ]);
+  const site = await siteContent();
+  const understood = qtext ? parseQuery(qtext, cats).explain : [];
+  // So sánh giá đối thủ (spec): chỉ giá đã kiểm tra trong 30 ngày, có link nguồn.
+  const comps = await q(`SELECT DISTINCT ON (p.id) p.id, p.name, p.price_taomua_10, p.price_taomua_500, c.platform, c.price, c.qty_basis, c.source_url, c.checked_at
+    FROM price_comparisons c JOIN products p ON p.id=c.product_id
+    WHERE p.published AND c.checked_at > now() - interval '30 days' ORDER BY p.id, c.price / GREATEST(c.qty_basis,1) DESC LIMIT 6`);
   const link = (patch: Partial<SP>) => {
     const p = new URLSearchParams();
     const merged = { ...searchParams, ...patch };
@@ -23,13 +35,40 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
   };
   return (
     <div className="stack">
-      <section className="hero">
-        <h1>Nguồn hàng sỉ từ xưởng, giá theo số lượng</h1>
-        <p>Mỗi sản phẩm có xưởng chính và xưởng dự phòng, chấm điểm TrustScore. Giá giảm theo 4 bậc 10, 50, 100, 500 cái. Tiền được giữ đến khi bạn nhận hàng.</p>
+      <section className="hero stack">
+        <h1 style={{ margin: 0 }}>{site.hero_title}</h1>
+        <p style={{ margin: 0 }}>{site.hero_text}</p>
+        <AiSearch initial={qtext} />
+        {understood.length > 0 && <div className="small">AI hiểu bạn tìm: {understood.join(' · ')}</div>}
         <div className="row">
-          <Link href="/bao-gia" className="btn">Chưa thấy hàng cần? Gửi yêu cầu báo giá</Link>
+          <Link href="/bao-gia" className="btn secondary">{site.hero_cta}</Link>
+          <Link href="/shop" className="btn secondary">9mua mua lẻ từ 1 cái</Link>
         </div>
       </section>
+
+      {!qtext && items.length > 0 && (
+        <ProfitCalc products={items.slice(0, 8).map((p) => ({ id: p.id, name: p.name, emoji: p.image_emoji, moq: p.moq,
+          prices: { 10: Number(p.price_taomua_10), 50: Number(p.price_taomua_50), 100: Number(p.price_taomua_100), 500: Number(p.price_taomua_500) } }))} />
+      )}
+
+      {!qtext && comps.length > 0 && (
+        <section className="card stack">
+          <h2 style={{ margin: 0 }}>So sánh giá với nơi khác <span className="muted small">giá đã kiểm tra trong 30 ngày</span></h2>
+          <div className="table-wrap"><table className="small">
+            <thead><tr><th>Sản phẩm</th><th>Nơi bán</th><th className="num">Giá nơi khác / cái</th><th className="num">taomua 10+</th><th className="num">taomua 500+</th><th>Chênh lệch</th></tr></thead>
+            <tbody>{comps.map((c) => {
+              const unit = Number(c.price) / Math.max(1, Number(c.qty_basis));
+              const diff = ((unit - Number(c.price_taomua_500)) / unit) * 100;
+              return (
+                <tr key={c.id}><td><Link href={`/san-pham/${c.id}`}>{c.name}</Link></td>
+                  <td><a href={c.source_url} target="_blank" rel="noopener noreferrer nofollow">{c.platform}</a></td>
+                  <td className="num">{vnd(unit)}</td><td className="num">{vnd(c.price_taomua_10)}</td><td className="num">{vnd(c.price_taomua_500)}</td>
+                  <td>{diff >= 0 ? <span className="badge ok">rẻ hơn đến {diff.toFixed(0)}%</span> : <span className="badge warn">đắt hơn {(-diff).toFixed(0)}%</span>}</td></tr>
+              );
+            })}</tbody>
+          </table></div>
+        </section>
+      )}
 
       <section className="card stack">
         <div className="chips" aria-label="Danh mục">

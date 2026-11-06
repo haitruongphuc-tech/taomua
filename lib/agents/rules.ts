@@ -58,7 +58,16 @@ export function competitorCut(p: PriceProduct, competitorUnit: number, tier: Tie
   return TIERS.some((t) => m[t] < p.prices[t]) ? m : null;
 }
 
-export const marginTooHigh = (p: PriceProduct) => TIERS.filter((t) => marginOf(p, t) > WHOLESALE_MARGIN_WARN);
+/** Pricing Engine (spec API #4): từ giá vốn + phí, đề xuất 4 bậc giá sỉ — mua càng nhiều giá càng thấp, biên giảm dần
+ *  nhưng mọi bậc vẫn ≥ 15% sau thuế phí. Biên mục tiêu theo bậc: 10+ 45%, 50+ 35%, 100+ 28%, 500+ 20%. */
+export const TIER_TARGETS: Record<Tier, number> = { 10: 45, 50: 35, 100: 28, 500: 20 };
+export function suggestTierPrices(cost: number, fee: number, inputVat = 0, targets: Record<Tier, number> = TIER_TARGETS): Prices {
+  const out = {} as Prices;
+  for (const t of TIERS) out[t] = priceForMargin(cost + fee, inputVat, Math.max(MARGIN_FLOOR, targets[t]));
+  return monotone(out);
+}
+
+export const marginTooHigh =(p: PriceProduct) => TIERS.filter((t) => marginOf(p, t) > WHOLESALE_MARGIN_WARN);
 
 /** Mức thay đổi giá lớn nhất giữa hai bảng giá (tỉ lệ, dương = tăng). */
 export const maxChange = (a: Prices, b: Prices) =>

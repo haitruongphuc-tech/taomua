@@ -8,7 +8,8 @@ import { TIERS, tierFor, priceForTier, type Tier } from '../pricing';
 import { trustScore } from '../trust';
 import { loadControls } from '../controls';
 import type { Controls } from '../payouts';
-import { aiEnabled, translate7, classify } from '../ai';
+import { aiEnabled, translate7, classify, chat } from '../ai';
+import { listingMargin } from '../channels';
 import { createSourcingRequest, evaluateRequest, guessCategory } from '../sourcing-db';
 import { fold } from '../sourcing';
 import { adDecision, adMetrics, SCALE_STEP } from '../marketing';
@@ -17,7 +18,7 @@ import { notifyText } from '../notify';
 import { audit, type Actor } from '../audit';
 import { applyAction } from './apply';
 import {
-  raiseToFloor, competitorCut, marginTooHigh, maxChange, pickBackup, latrDecision, capitalDecision, costJumped,
+  raiseToFloor, competitorCut, marginTooHigh, maxChange, latrDecision, capitalDecision, costJumped,
   matchProduct, negotiationScripts, supplierOk, type Prices, type PriceProduct, SAFETY_LOCK, SAFETY_WARN,
 } from './rules';
 
@@ -34,7 +35,7 @@ export type AgentCode = keyof typeof AGENTS;
 
 export type Finding = {
   agent: AgentCode;
-  kind: 'PRICE_CHANGE' | 'SWITCH_SUPPLIER' | 'SOURCING_CHOICE' | 'AD_STATUS' | 'AD_BUDGET' | 'PRODUCT_STATUS' | 'CONTROL_SET' | 'RFQ_QUOTE' | 'SUPPLIER_TRUST' | 'TRANSLATE' | 'NOTE';
+  kind: 'PRICE_CHANGE' | 'SWITCH_SUPPLIER' | 'SOURCING_CHOICE' | 'AD_STATUS' | 'AD_BUDGET' | 'PRODUCT_CONTENT' | 'PRODUCT_STATUS' | 'CONTROL_SET' | 'RFQ_QUOTE' | 'SUPPLIER_TRUST' | 'TRANSLATE' | 'NOTE';
   severity?: 'INFO' | 'WARN' | 'DANGER';
   title: string;
   detail?: Record<string, unknown>;
@@ -78,7 +79,7 @@ async function trend(ctx: Ctx): Promise<Finding[]> {
   return out;
 }
 
-async function supply(): Promise<Finding[]> {
+async function supply(ctx: Ctx): Promise<Finding[]> {
   const out: Finding[] = [];
   const sups = await q('SELECT * FROM suppliers');
   const byId = new Map(sups.map((s) => [s.id, s]));
@@ -106,6 +107,21 @@ async function supply(): Promise<Finding[]> {
     } else if (backups.length < 3) {
       out.push({ agent: 'RYN-SUPPLY', kind: 'NOTE', title: `${p.name}: mới có ${backups.length}/3 xưởng dự phòng cùng ngành ${p.category}`,
         entity: 'product', entityId: p.id, dedupe: `fewbackup:${p.id}:${backups.length}` });
+    }
+  }
+  // Canh mua giảm giá: xưởng đạt chuẩn báo giá thấp hơn ≥ 10% giá vốn hiện tại → mở yêu cầu đổi xưởng (CEO quyết định).
+  if (ctx.ctl.CANH_GIAM_GIA) {
+    const deals = await q(`SELECT DISTINCT ON (p.id) p.id, p.name, p.category, p.moq, p.cost, o.unit_cost, s.name AS sup
+      FROM supplier_offers o JOIN products p ON p.id=o.product_id JOIN suppliers s ON s.id=o.supplier_id
+      WHERE p.status <> 'PAUSED' AND o.supplier_id IS DISTINCT FROM p.supplier_id AND o.unit_cost <= p.cost * 0.9
+        AND s.trust_score >= 85 AND s.defect_rate <= 0.02 AND (o.valid_until IS NULL OR o.valid_until >= CURRENT_DATE)
+      ORDER BY p.id, o.unit_cost`);
+    for (const d of deals) {
+      const pct = Math.round((1 - Number(d.unit_cost) / Number(d.cost)) * 100);
+      const r = await tx((c) => createSourcingRequest(c, { productId: d.id, text: d.name, category: d.category, quantity: Math.max(100, d.moq), targetUnitPrice: null,
+        reason: `Canh giảm giá: ${d.sup} báo ${fmt(Number(d.unit_cost))} đ, thấp hơn giá vốn hiện tại ${pct}%` }));
+      if (r.created) out.push({ agent: 'RYN-SUPPLY', kind: 'NOTE', entity: 'product', entityId: d.id, dedupe: `deal:${d.id}:${d.unit_cost}`,
+        title: `Canh giảm giá: ${d.name} — ${d.sup} rẻ hơn ${pct}%, đã mở yêu cầu tìm xưởng để CEO chọn` });
     }
   }
   // Chấm điểm mọi yêu cầu tìm xưởng đang mở (từ sản phẩm, từ RFQ, hoặc người tạo trên trang Tìm xưởng).
@@ -136,19 +152,34 @@ async function supply(): Promise<Finding[]> {
 async function nego(ctx: Ctx): Promise<Finding[]> {
   const rateEnv = Number(process.env.CNY_VND_RATE);
   const rate = rateEnv > 0 ? rateEnv : 3500;
+  const out: Finding[] = [];
+  if (ctx.ctl.CANH_GIAM_GIA) {
+    // Canh khách mua 500 cái (spec): đàm phán lại với xưởng để giảm thêm 5–10% cho bậc 500.
+    const big = await q(`SELECT DISTINCT p.id, p.name, p.cost, s.name AS sup FROM order_items i JOIN wholesale_orders o ON o.id=i.order_id
+      JOIN products p ON p.id=i.product_id LEFT JOIN suppliers s ON s.id=p.supplier_id
+      WHERE i.tier = 500 AND o.created_at > now() - interval '7 days' AND o.status NOT IN ('HUY','TU_CHOI')`);
+    for (const b of big) {
+      const priceCny = Number(b.cost) / rate;
+      out.push({ agent: 'RYN-NEGO', kind: 'NOTE', entity: 'product', entityId: b.id, dedupe: `nego500:${b.id}:${week(ctx.now)}`,
+        title: `Khách vừa mua 500+ ${b.name}: đàm phán lại ${b.sup ?? 'xưởng'} giảm 5–10% (mục tiêu ${fmt(Number(b.cost) * 0.92)} đ)`,
+        detail: { san_pham: [{ sku: b.id, name: b.name, xuong: b.sup, gia_hien_tai_cny: Math.round(priceCny * 10) / 10, muc_tieu_cny: Math.round(priceCny * 0.92 * 10) / 10,
+          kich_ban: negotiationScripts({ productVi: b.name, priceCny, targetCny: priceCny * 0.92, moq: 500, testQty: 500 }) }], ty_gia: rate, ty_gia_tam: !(rateEnv > 0),
+          luu_y: 'Đơn 500 cái đã có; đàm phán lại để cập nhật giá bậc 500 rẻ hơn.' } });
+    }
+  }
   const rows = await q(`SELECT p.id, p.sku, p.name, p.cost, s.name AS sup, s.moq FROM products p JOIN suppliers s ON s.id=p.supplier_id
     WHERE s.source='1688' AND p.status <> 'PAUSED'`);
-  if (!rows.length) return [];
+  if (!rows.length) return out;
   const items = rows.map((r) => {
     const priceCny = Number(r.cost) / rate;
     return { sku: r.sku, name: r.name, xuong: r.sup, gia_hien_tai_cny: Math.round(priceCny * 10) / 10, muc_tieu_cny: Math.round(priceCny * 0.9 * 10) / 10,
       kich_ban: negotiationScripts({ productVi: r.name, priceCny, targetCny: priceCny * 0.9, moq: Math.max(Number(r.moq), 100), testQty: 50 }) };
   });
-  return [{ agent: 'RYN-NEGO', kind: 'NOTE', title: `Kịch bản đàm phán tiếng Trung tuần ${week(ctx.now)}: ${rows.length} sản phẩm`, dedupe: `nego:${week(ctx.now)}`,
+  return [...out, { agent: 'RYN-NEGO', kind: 'NOTE', title: `Kịch bản đàm phán tiếng Trung tuần ${week(ctx.now)}: ${rows.length} sản phẩm`, dedupe: `nego:${week(ctx.now)}`,
     detail: { ty_gia: rate, ty_gia_tam: !(rateEnv > 0), san_pham: items, luu_y: 'AI soạn sẵn. Người phụ trách gửi cho xưởng và quyết định; đặt cọc > 20 triệu cần CEO.' } }];
 }
 
-async function price(): Promise<Finding[]> {
+async function price(ctx: Ctx): Promise<Finding[]> {
   const out: Finding[] = [];
   const prods = await q("SELECT * FROM products WHERE status <> 'PAUSED'");
   const comps = await q(`SELECT DISTINCT ON (product_id, platform) product_id, platform, price, qty_basis, checked_at FROM price_comparisons
@@ -164,7 +195,7 @@ async function price(): Promise<Finding[]> {
     }
     const mine = comps.filter((c) => c.product_id === p.id).map((c) => ({ ...c, unit: Number(c.price) / Math.max(1, Number(c.qty_basis)) }));
     const cheapest = mine.sort((a, b) => a.unit - b.unit)[0];
-    if (cheapest) {
+    if (cheapest && ctx.ctl.CANH_GIAM_GIA) {
       const tier: Tier = tierFor(Number(cheapest.qty_basis)) ?? 10;
       const cut = competitorCut(cur, cheapest.unit, tier);
       if (cut) {
@@ -179,6 +210,16 @@ async function price(): Promise<Finding[]> {
     if (high.length) {
       out.push({ agent: 'RYN-PRICE', kind: 'NOTE', severity: 'WARN', title: `${p.name}: biên > 150% ở bậc ${high.join(', ')}. Kiểm tra giá nhập.`,
         entity: 'product', entityId: p.id, dedupe: `highmargin:${p.id}` });
+    }
+  }
+  // Giá trên kênh bán (9mua lẻ, sàn): biên sau phí kênh phải ≥ 15%; giá lẻ không thấp hơn giá sỉ 10+.
+  const listings = await q(`SELECT l.product_id, l.price, ch.name AS channel, ch.fee_pct, p.name, p.cost, p.fee, p.input_vat, p.price_taomua_10
+    FROM channel_listings l JOIN sales_channels ch ON ch.id=l.channel_id JOIN products p ON p.id=l.product_id WHERE l.status='DANG_BAN' AND ch.kind <> 'OWN'`);
+  for (const l of listings) {
+    const m = listingMargin(Number(l.price), Number(l.cost) + Number(l.fee), Number(l.input_vat), Number(l.fee_pct));
+    if (m.marginOnCost < 15 || Number(l.price) < Number(l.price_taomua_10)) {
+      out.push({ agent: 'RYN-PRICE', kind: 'NOTE', severity: m.net <= 0 ? 'DANGER' : 'WARN', entity: 'product', entityId: l.product_id, dedupe: `listing:${l.product_id}:${l.channel}:${l.price}`,
+        title: `${l.name} trên ${l.channel}: giá ${fmt(Number(l.price))} đ, biên sau phí kênh ${m.marginOnCost}%${Number(l.price) < Number(l.price_taomua_10) ? ', thấp hơn giá sỉ 10+' : ''}. Sửa ở Kênh bán.` });
     }
   }
   return out;
@@ -199,6 +240,14 @@ async function trace(): Promise<Finding[]> {
         entity: 'product', entityId: p.id, dedupe: `costjump:${p.id}:${now}` });
     }
   }
+  // Compliance (spec 01, Agent 7): xưởng chưa có chứng nhận / liên hệ, đơn từ 10 triệu chưa xuất hóa đơn quá 3 ngày.
+  const noCert = await q(`SELECT DISTINCT s.name FROM products p JOIN suppliers s ON s.id=p.supplier_id WHERE p.published AND (NOT s.verified_cert OR s.contact IS NULL)`);
+  if (noCert.length) out.push({ agent: 'RYN-TRACE', kind: 'NOTE', severity: 'WARN', title: `Pháp lý: ${noCert.length} xưởng đang cung cấp hàng chưa có chứng nhận đã xác minh hoặc thông tin liên hệ: ${noCert.map((x) => x.name).join(', ')}`,
+    dedupe: `compliance-cert:${noCert.map((x) => x.name).sort().join(',')}` });
+  const noInvoice = await q(`SELECT code, tong_dt FROM wholesale_orders WHERE payment_status='DA_NHAN' AND invoice_no IS NULL AND tong_dt >= 10000000
+    AND trade_assurance_status <> 'REFUND' AND paid_at < now() - interval '3 days'`);
+  for (const o of noInvoice) out.push({ agent: 'RYN-TRACE', kind: 'NOTE', severity: 'WARN', entity: 'order', dedupe: `invoice:${o.code}`,
+    title: `Pháp lý: đơn ${o.code} (${fmt(Number(o.tong_dt))} đ) đã nhận tiền hơn 3 ngày chưa có hóa đơn điện tử. Ghi ở Kế toán & thuế.` });
   const lowQc = prods.filter((p) => p.rynn_brain_pass != null && Number(p.rynn_brain_pass) < 98);
   if (lowQc.length) {
     out.push({ agent: 'RYN-TRACE', kind: 'NOTE', severity: 'WARN', title: `${lowQc.length} sản phẩm có QC dưới 98%`,
@@ -278,6 +327,13 @@ async function sales(ctx: Ctx): Promise<Finding[]> {
     }
   }
   if (aiEnabled()) {
+    const thin = await q(`SELECT id, name, category, description FROM products WHERE published AND length(description) < 60 LIMIT 3`);
+    for (const p of thin) {
+      const text = await chat([{ role: 'system', content: 'Viết mô tả bán sỉ 2-3 câu tiếng Việt cho sản phẩm, nêu công dụng và điểm bán, không bịa thông số, không hứa giá.' },
+        { role: 'user', content: `${p.name} (ngành ${p.category}). Mô tả hiện có: ${p.description || 'chưa có'}` }]).catch(() => null);
+      if (text) out.push({ agent: 'RYN-SALES', kind: 'PRODUCT_CONTENT', level: 2, entity: 'product', entityId: p.id, dedupe: `content:${p.id}`,
+        title: `AI viết mô tả cho ${p.name}`, detail: { product_id: p.id, from: p.description, to: text.trim().slice(0, 1000), note: text.trim().slice(0, 300) } });
+    }
     const need = await q(`SELECT id, name FROM products WHERE published AND (name_i18n = '{}'::jsonb OR NOT name_i18n ? 'zh') LIMIT 5`);
     for (const p of need) {
       const names = await translate7(p.name).catch(() => null);

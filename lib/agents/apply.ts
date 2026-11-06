@@ -58,6 +58,11 @@ export async function applyAction(c: PoolClient, a: ActionRow): Promise<string> 
       if (!r.rowCount) throw new UserError('Ngân sách chiến dịch đã đổi sau khi AI đề xuất.');
       return 'Đã tăng ngân sách/ngày. Nhớ cập nhật trên nền tảng quảng cáo (chưa có API).';
     }
+    case 'PRODUCT_CONTENT': {
+      const r = await c.query('UPDATE products SET description=$3, updated_at=now() WHERE id=$1 AND description=$2', [d.product_id, d.from ?? '', String(d.to).slice(0, 2000)]);
+      if (!r.rowCount) throw new UserError('Mô tả đã được sửa sau khi AI đề xuất.');
+      return 'Đã cập nhật mô tả sản phẩm.';
+    }
     case 'SOURCING_CHOICE':
       return chooseOfferTx(c, d.request_id, d.offer_id, null);
     case 'EXTERNAL': // việc n8n gửi vào QAC: chỉ ghi nhận quyết định, n8n hỏi lại trạng thái để chạy tiếp

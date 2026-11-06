@@ -26,9 +26,13 @@ export default function AddToCart({ id, moq, prices }: { id: string; moq: number
           Số lượng
           <input type="number" min={min} step={1} value={qty} onChange={(e) => { setQty(Math.floor(Number(e.target.value) || 0)); setDone(false); }} />
         </label>
+        <label className="field" style={{ flex: 1, minWidth: 160 }}>Kéo nhanh 10 → 500
+          <input type="range" min={min} max={Math.max(500, min)} step={10} value={Math.min(Math.max(qty, min), Math.max(500, min))} onChange={(e) => { setQty(Number(e.target.value)); setDone(false); }} />
+        </label>
         <div>
           <div className="muted small">Thành tiền (đã gồm VAT)</div>
           <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 700 }}>{ok ? (unit * qty).toLocaleString('vi-VN') + ' đ' : '—'}</div>
+          {ok && tier !== 10 && <div className="small" style={{ color: 'var(--ok)' }}>Tiết kiệm {((prices[10] - unit) * qty).toLocaleString('vi-VN')} đ so với giá 10+</div>}
         </div>
       </div>
       {!ok && <div className="alert warn small">Đặt tối thiểu {min} cái.</div>}

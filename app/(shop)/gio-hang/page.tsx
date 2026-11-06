@@ -15,7 +15,22 @@ export default function CartPage() {
   const [err, setErr] = useState('');
   const [placed, setPlaced] = useState<{ code: string; total: number; needsApproval: boolean } | null>(null);
 
-  useEffect(() => { setLines(readCart()); }, []);
+  useEffect(() => {
+    // Link thêm vào giỏ (AI agent / shop.md / máy tính lời): /gio-hang?add=<id>:<qty>,<id>:<qty>
+    let cart = readCart();
+    const add = new URLSearchParams(window.location.search).get('add');
+    if (add) {
+      for (const part of add.split(',').slice(0, 20)) {
+        const [id, q] = part.split(':');
+        const qty = Math.floor(Number(q) || 0);
+        if (!/^[0-9a-f-]{36}$/i.test(id) || qty < 1) continue;
+        cart = [...cart.filter((l) => l.id !== id), { id, qty: Math.min(qty, 1_000_000) }];
+      }
+      writeCart(cart);
+      window.history.replaceState(null, '', '/gio-hang');
+    }
+    setLines(cart);
+  }, []);
   useEffect(() => {
     if (!lines) return;
     if (!lines.length) { setQuote({ lines: [], total: 0, ok: false }); return; }

@@ -9,6 +9,7 @@ const nextConfig = {
       { source: '/admin/approval', destination: '/quan-tri/duyet-nhanh', permanent: false },
       { source: '/admin/approval/:id', destination: '/quan-tri/duyet-nhanh', permanent: false },
       { source: '/admin/payment', destination: '/quan-tri/kiem-soat-chi', permanent: false },
+      { source: '/product/:id', destination: '/san-pham/:id', permanent: false },
     ];
   },
   async headers() {

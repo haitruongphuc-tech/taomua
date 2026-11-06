@@ -490,3 +490,39 @@ CREATE TABLE IF NOT EXISTS shipping_rates (
   UNIQUE (carrier, zone)
 );
 ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS ship_zone TEXT;
+
+-- ===== Canvas: nội dung giao diện sửa trên trang quản trị (spec Canvas visual editor). Không có dòng thì dùng mặc định. =====
+CREATE TABLE IF NOT EXISTS site_content (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_by UUID REFERENCES users(id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ===== Lịch sử giá bán 365 ngày (spec: Price history 365 days) — công khai cho khách =====
+CREATE TABLE IF NOT EXISTS product_price_history (
+  id          BIGSERIAL PRIMARY KEY,
+  product_id  UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  price_10    BIGINT NOT NULL,
+  price_50    BIGINT NOT NULL,
+  price_100   BIGINT NOT NULL,
+  price_500   BIGINT NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS price_history_product ON product_price_history(product_id, recorded_at DESC);
+
+-- Mỗi lần giá 4 bậc đổi (sửa tay, AI đổi giá, nhập mới) tự ghi lịch sử.
+CREATE OR REPLACE FUNCTION record_price_history() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'INSERT' OR NEW.price_taomua_10 IS DISTINCT FROM OLD.price_taomua_10 OR NEW.price_taomua_50 IS DISTINCT FROM OLD.price_taomua_50
+     OR NEW.price_taomua_100 IS DISTINCT FROM OLD.price_taomua_100 OR NEW.price_taomua_500 IS DISTINCT FROM OLD.price_taomua_500 THEN
+    INSERT INTO product_price_history(product_id, price_10, price_50, price_100, price_500)
+    VALUES (NEW.id, NEW.price_taomua_10, NEW.price_taomua_50, NEW.price_taomua_100, NEW.price_taomua_500);
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS products_price_history ON products;
+CREATE TRIGGER products_price_history AFTER INSERT OR UPDATE ON products FOR EACH ROW EXECUTE FUNCTION record_price_history();
+INSERT INTO product_price_history(product_id, price_10, price_50, price_100, price_500, recorded_at)
+  SELECT p.id, p.price_taomua_10, p.price_taomua_50, p.price_taomua_100, p.price_taomua_500, p.created_at FROM products p
+  WHERE NOT EXISTS (SELECT 1 FROM product_price_history h WHERE h.product_id=p.id);

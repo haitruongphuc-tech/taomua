@@ -34,7 +34,11 @@ Tài khoản seed: `ceo@`, `truongnhom@`, `ketoan@`, `nhanvien@taomua.local`. Đ
 | Thông tin còn thiếu | `lib/setup-status.ts` → trang `/quan-tri/can-nhap` |
 | Logic | `lib/pricing.ts` (biên), `lib/approval.ts` (cấp duyệt), `lib/orders.ts` (vòng đời đơn, giữ tiền), `lib/channels.ts` (kênh bán), `lib/reconcile.ts` (đối soát) |
 | Lược đồ | `db/schema.sql` |
-| Tài liệu gốc | `docs/goc/` (spec, workflow n8n, mockup, dự toán) |
+| Tài liệu gốc | file `00`–`10` ở thư mục gốc, `docs/`, `mockups/`, `excels/`, `pdfs/`, `pngs/`, `n8n/` (mỗi file một chức năng, không trùng) |
+
+## Đối soát thuyết minh
+
+Bảng đối chiếu từng mục thuyết minh với mã nguồn, mục chạy khi có khóa và mục cố ý làm khác: [`docs/BAO_CAO_DOI_SOAT_THUYET_MINH.md`](docs/BAO_CAO_DOI_SOAT_THUYET_MINH.md).
 
 ## Thương hiệu: logo và slogan
 

@@ -75,9 +75,14 @@ export async function createOrder(input: NewOrder, actor: Actor = SYSTEM) {
     const cost = lines.reduce((s, l) => s + (Number(l.product.cost) + Number(l.product.fee)) * l.quantity, 0);
     const inputVat = lines.reduce((s, l) => s + Number(l.product.input_vat) * l.quantity, 0);
     const m = calcMargin({ revenue, cost, inputVat, channelFeePct: Number(ch.fee_pct) });
-    const existing = (await c.query('SELECT kind, agent_limit FROM customers WHERE phone=$1', [phone])).rows[0];
-    if (existing?.kind === 'AI_AGENT' && existing.agent_limit && m.revenue > Number(existing.agent_limit)) {
-      throw new OrderError(`Đơn vượt hạn mức ${Number(existing.agent_limit).toLocaleString('vi-VN')} đ của AI agent.`);
+    const existing = (await c.query('SELECT id, kind, agent_limit FROM customers WHERE phone=$1', [phone])).rows[0];
+    if (existing?.kind === 'AI_AGENT' && existing.agent_limit) {
+      // Agent Profiles (spec): hạn mức chi theo tháng 10 / 50 / 100 triệu cho AI agent mua hộ.
+      const spent = Number((await c.query(`SELECT COALESCE(sum(tong_dt),0) AS s FROM wholesale_orders WHERE customer_id=$1
+        AND status NOT IN ('HUY','TU_CHOI') AND created_at >= date_trunc('month', now())`, [existing.id])).rows[0].s);
+      if (spent + m.revenue > Number(existing.agent_limit)) {
+        throw new OrderError(`Đơn vượt hạn mức ${Number(existing.agent_limit).toLocaleString('vi-VN')} đ/tháng của AI agent (đã dùng ${spent.toLocaleString('vi-VN')} đ).`);
+      }
     }
     const base = approvalLevel(m.revenue, m.marginOnCost, m.net);
     // Đơn quốc tế: phí vận chuyển và thủ tục xuất khẩu cần người báo trước khi khách thanh toán → tối thiểu Cấp 2.

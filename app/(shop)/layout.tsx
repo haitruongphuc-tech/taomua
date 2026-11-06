@@ -6,10 +6,12 @@ import Logo from '@/components/Logo';
 import SloganBar from '@/components/Slogan';
 import ChatWidget from '@/components/ChatWidget';
 import { SLOGANS } from '@/lib/slogans';
+import { siteContent } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
+  const site = await siteContent();
   const sim = (await one<{ n: number }>('SELECT count(*)::int AS n FROM products WHERE published AND is_simulated'))?.n ?? 0;
   return (
     <>
@@ -31,6 +33,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
           </nav>
         </div>
       </header>
+      {site.announcement && <div className="announce" role="note"><div className="wrap">{site.announcement}</div></div>}
       <SloganBar />
       <main className="wrap page">{children}</main>
       <footer className="site">

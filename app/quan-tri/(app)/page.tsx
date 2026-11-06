@@ -5,6 +5,7 @@ import { short, pct, vnd } from '@/lib/format';
 import { workingCapital } from '@/lib/capital';
 import Flash from '@/components/Flash';
 import { setupItems } from '@/lib/setup-status';
+import { channels } from '@/lib/notify';
 
 export default async function Overview({ searchParams }: { searchParams: { ok?: string; loi?: string } }) {
   const u = await requireUser();
@@ -28,10 +29,11 @@ export default async function Overview({ searchParams }: { searchParams: { ok?: 
   const wc = workingCapital(Number(m.dt_da_thu), null, margin);
 
   const alerts: { tone: string; text: React.ReactNode }[] = [];
-  if (m.qua_han > 0) alerts.push({ tone: 'bad', text: <><b>{m.qua_han}</b> đơn quá hạn duyệt. <Link href="/quan-tri/duyet">Xem</Link></> });
+  if (m.qua_han > 0) alerts.push({ tone: 'bad', text: <><b>{m.qua_han}</b> đơn quá hạn duyệt. <Link href="/quan-tri/duyet-nhanh">Xem</Link></> });
   if (lastRecon?.status === 'LECH') alerts.push({ tone: 'bad', text: <>Đối soát gần nhất lệch {pct(lastRecon.diff_pct)}. <Link href="/quan-tri/doi-soat">Xem</Link></> });
   if (fin && m.cp > 0 && margin < 20) alerts.push({ tone: 'warn', text: <>Biên ròng tháng {pct(margin)} dưới mức an toàn 20%.</> });
-  if (!process.env.TELEGRAM_BOT_TOKEN) alerts.push({ tone: 'warn', text: 'Chưa cấu hình bot Telegram: yêu cầu duyệt chỉ hiện trên web.' });
+  const ch = channels();
+  if (!ch.zalo && !ch.email) alerts.push({ tone: 'warn', text: <>Chưa cấu hình Zalo OA / email: yêu cầu duyệt chỉ hiện ở <Link href="/quan-tri/duyet-nhanh">Duyệt nhanh</Link>.</> });
   const ai = await one(`SELECT count(*) FILTER (WHERE status='DE_XUAT')::int AS cho, count(*) FILTER (WHERE status='TIN' AND severity='DANGER')::int AS nguy,
       (SELECT max(started_at) FROM agent_runs) AS last FROM agent_actions`);
   if (ai.cho > 0 || ai.nguy > 0) alerts.push({ tone: ai.nguy > 0 ? 'bad' : 'warn', text: <>AI: <b>{ai.cho}</b> đề xuất chờ duyệt{ai.nguy > 0 ? <>, <b>{ai.nguy}</b> cảnh báo đỏ</> : ''}. <Link href="/quan-tri/ai">Duyệt One-Tap</Link></> });
@@ -45,7 +47,7 @@ export default async function Overview({ searchParams }: { searchParams: { ok?: 
       <Flash sp={searchParams} />
       {alerts.map((a, i) => <div key={i} className={`alert ${a.tone}`}>{a.text}</div>)}
       <div className="grid cols-4">
-        <div className="card kpi"><span className="l">Chờ duyệt</span><span className="v">{m.cho_duyet}</span><Link className="small" href="/quan-tri/duyet">Mở hàng chờ →</Link></div>
+        <div className="card kpi"><span className="l">Chờ duyệt</span><span className="v">{m.cho_duyet}</span><Link className="small" href="/quan-tri/duyet-nhanh">Mở hàng chờ →</Link></div>
         <div className="card kpi"><span className="l">Chờ thanh toán</span><span className="v">{m.cho_tt}</span></div>
         <div className="card kpi"><span className="l">Cần chuẩn bị giao</span><span className="v">{m.chuan_bi}</span></div>
         <div className="card kpi"><span className="l">Tổng đơn</span><span className="v">{m.tong}</span></div>

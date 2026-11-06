@@ -7,7 +7,7 @@ type Db = PoolClient | typeof pool;
 
 /** Toàn bộ xưởng và báo giá còn hạn, để AI chấm điểm. */
 export async function loadCandidates(c: Db = pool): Promise<Candidate[]> {
-  const sups = (await c.query('SELECT id, name, categories, trust_score, defect_rate, lead_time_days, ships_international, country, is_simulated FROM suppliers')).rows;
+  const sups = (await c.query('SELECT id, name, source, categories, trust_score, defect_rate, lead_time_days, ships_international, country, is_simulated FROM suppliers')).rows;
   const offers = (await c.query(`SELECT * FROM supplier_offers WHERE valid_until IS NULL OR valid_until >= CURRENT_DATE`)).rows;
   const byId = new Map(sups.map((s) => [s.id, { ...s, defect_rate: Number(s.defect_rate) }]));
   const out: Candidate[] = [];

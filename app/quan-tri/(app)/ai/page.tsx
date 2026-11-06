@@ -179,19 +179,22 @@ export default async function AiCenter({ searchParams }: { searchParams: { ok?: 
 }
 
 const APIS: [string, string, string][] = [
+  // 14 endpoint theo 03_API_SPEC.md (đúng thứ tự spec)
+  ['POST /api/v1/trend-hunter/scan', '#1 Hàng hot {source, limit} → {trends} (RYN-TREND; nguồn ngoài khi có khóa)', 'Chạy được'],
+  ['POST /api/v1/supplier-brain/find', '#2 Tìm 50 xưởng + 3 dự phòng {product_name, category}', 'Chạy được'],
+  ['POST /api/v1/supplier-brain/trust-score', '#3 TrustScore + factors (5 yếu tố tạm, chờ đủ 17/19 yếu tố)', 'Chạy được'],
+  ['POST /api/v1/pricing-engine/calculate', '#4 Đề xuất 4 bậc giá, biên sau thuế phí, cấp duyệt, vốn 30% + 15%', 'Chạy được'],
+  ['POST /api/v1/approval/queue', '#5 n8n gửi việc cần duyệt; GET ?id= hỏi trạng thái (thay Telegram)', 'Chạy được'],
+  ['POST /api/v1/approval/approve', '#6 Duyệt 1 chạm (người đăng nhập)', 'Chạy được'],
+  ['GET|POST /api/v1/agent-gateway/shop-md', '#7 Danh mục cho AI agent; POST {query} → sản phẩm + link giỏ hàng', 'Chạy được'],
+  ['POST /api/v1/agent-gateway/profiles', '#8 Agent Profiles 10/50/100 triệu/tháng → {limit, spent, remaining}', 'Chạy được'],
+  ['POST /api/v1/wfs/fulfillment', '#9 DROPSHIP / WFS / SAME_DAY_30MIN', 'Chạy được'],
+  ['POST /api/v1/trade-assurance/hold', '#10 HOLD / RELEASED / REFUND (giải ngân, hoàn tiền: CEO)', 'Chạy được'],
+  ['POST /api/v1/rynn-brain/check', '#11 QC: nhận kết quả kiểm {checked, defects}; ảnh khi có khóa camera', 'Chạy được'],
+  ['POST /api/v1/latr/test', '#12 Bán thử 50–100 cái → TESTING / SCALING / STOPPED', 'Chạy được'],
+  ['POST /api/v1/scintilla/analytics', '#13 Doanh số, ROAS, CTR, biên, vốn, vòng quay', 'Chạy được'],
+  ['POST /api/v1/working-capital/calculate', '#14 Vốn 30% + 15% = 45%, vòng quay, biên an toàn', 'Chạy được'],
+  // Bổ sung ngoài 14 endpoint
   ['POST /api/v1/agents/run', 'Chạy 7 agent (n8n gọi 6 giờ/lần)', 'Chạy được'],
-  ['POST /api/v1/trend-hunter/scan', 'Xếp hạng hàng hot (RYN-TREND, dữ liệu nội bộ)', 'Chạy được'],
-  ['POST /api/v1/supplier-brain/find', 'Xếp hạng xưởng đã có cho một sản phẩm', 'Chạy được'],
-  ['POST /api/v1/scintilla/analytics', 'Phân tích bán hàng theo kênh, sản phẩm', 'Chạy được'],
-  ['POST /api/v1/pricing-engine/calculate', 'Tính biên ròng sau thuế, phí và cấp duyệt', 'Chạy được'],
-  ['POST /api/v1/supplier-brain/trust-score', 'Tính TrustScore (5 yếu tố tạm thời)', 'Chạy được'],
-  ['POST /api/v1/approval/telegram', 'Gửi yêu cầu duyệt qua Telegram', 'Chạy được khi có bot'],
-  ['GET /api/v1/agent-gateway/shop-md', 'Danh mục cho AI agent đọc và đặt hàng', 'Chạy được'],
-  ['POST /api/v1/agent-gateway/profiles', 'Hạn mức chi cho AI agent 10/50/100 triệu', 'Chạy được'],
-  ['POST /api/v1/wfs/fulfillment', 'Chọn hình thức giao hàng', 'Chạy được'],
-  ['POST /api/v1/trade-assurance/hold', 'Ghi nhận tiền và giữ tiền', 'Chạy được'],
-  ['POST /api/v1/latr/test', 'Ghi kết quả bán thử 50-100 cái', 'Chạy được'],
-  ['POST /api/v1/working-capital/calculate', 'Vốn cần 30% + 15%', 'Chạy được'],
-  ['POST /api/v1/rynn-brain/check', 'Kiểm lỗi bằng camera', 'Chờ API nhà cung cấp'],
-  ['POST /api/v1/canvas/edit', 'Sửa giao diện bằng lời', 'Chờ API nhà cung cấp'],
+  ['POST /api/v1/canvas/edit', 'Canvas: sửa nội dung cửa hàng {key, value} hoặc bằng lời (cần AI)', 'Chạy được'],
 ];

@@ -1,6 +1,7 @@
 // Danh sách thông tin còn thiếu / đang giả lập, tính trực tiếp từ cấu hình và database mỗi lần mở trang.
 // THIEU: chưa có, cần nhập sau. GIA_LAP: đang chạy bằng số giả lập, cần sửa sau. CHUA_LAM: spec có nhưng chờ nhà cung cấp / quyết định. OK: đã có.
 import { q } from './db';
+import { CONNECTORS, connectorEnabled } from './connectors';
 
 export type SetupStatus = 'OK' | 'THIEU' | 'GIA_LAP' | 'CHUA_LAM';
 export type SetupItem = { group: string; label: string; status: SetupStatus; detail: string; where: string; href?: string };
@@ -92,18 +93,13 @@ export async function setupItems(): Promise<SetupItem[]> {
     { group: 'Số liệu cần nhập', label: 'Danh sách 19 yếu tố TrustScore và trọng số', status: 'GIA_LAP', where: 'lib/trust.ts', detail: 'Đang tạm tính 5 yếu tố.' },
 
     // --- Chờ nhà cung cấp / quyết định ---
-    { group: 'Chờ API nhà cung cấp', label: 'Nguồn trend ngoài (TikTok Creative Center, Google Trends, 1688, Amazon, Shopee)', status: 'CHUA_LAM', where: 'RYN-TREND',
-      detail: 'RYN-TREND đang xếp hạng bằng dữ liệu trong hệ thống. Cần tài khoản API từng nguồn.' },
-    { group: 'Chờ API nhà cung cấp', label: 'Tìm xưởng tự động (Accio / 1688 Open API)', status: 'CHUA_LAM', where: 'RYN-SUPPLY, /api/v1/supplier-brain/find',
-      detail: 'Hiện chọn từ xưởng đã nhập. Cần tài khoản Alibaba Open Platform.' },
-    { group: 'Chờ API nhà cung cấp', label: 'Camera QC (RynnBrain)', status: 'CHUA_LAM', where: '/api/v1/rynn-brain/check', detail: 'Chưa có tài liệu API công khai. Tạm nhập tay tỉ lệ QC.' },
-    { group: 'Chờ API nhà cung cấp', label: 'Đơn vị vận chuyển (GHN, GHTK, J&T)', status: 'CHUA_LAM', where: 'RYN-LOGI', detail: 'Cần token từng hãng để AI so phí và chọn rẻ nhất.' },
-    { group: 'Chờ API nhà cung cấp', label: 'Ngân hàng (sao kê tự động)', status: 'CHUA_LAM', where: 'Đối soát sao kê', detail: 'Hiện tải sao kê CSV. Cần API doanh nghiệp của ngân hàng.' },
+    // Cổng kết nối dịch vụ ngoài (lib/connectors.ts): tự đổi sang 'Đã có' khi nhập đủ khóa trong .env.
+    ...CONNECTORS.map((c): SetupItem => ({ group: 'Kết nối dịch vụ ngoài', label: c.name, status: connectorEnabled(c.key) ? 'OK' : 'CHUA_LAM', where: c.env.join(', '),
+      detail: `${c.note} Dùng cho ${c.used_by}.${connectorEnabled(c.key) ? '' : ' Chưa có khóa: đang chạy bằng dữ liệu nội bộ / nhập tay.'}` })),
     { group: 'Cấu hình .env', label: 'Báo duyệt qua Zalo OA', status: env('ZALO_OA_ACCESS_TOKEN', 'ZALO_CEO_USER_ID') ? 'OK' : 'THIEU', where: 'ZALO_OA_ACCESS_TOKEN, ZALO_CEO_USER_ID',
       detail: 'Kênh phụ của One-Tap: tin Zalo kèm link mở Duyệt nhanh. Tạo OA tại oa.zalo.me.' },
     { group: 'Cấu hình .env', label: 'Báo duyệt qua email', status: env('SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'APPROVAL_EMAIL_TO') ? 'OK' : 'THIEU', where: 'SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, APPROVAL_EMAIL_TO',
       detail: 'Kênh dự phòng: email kèm link mở Duyệt nhanh.' },
-    { group: 'Chờ API nhà cung cấp', label: 'Quảng cáo và video (TikTok/FB/Google Ads, HeyGen, CapCut)', status: 'CHUA_LAM', where: 'RYN-SALES', detail: 'Cần tài khoản quảng cáo và API video.' },
     { group: 'Chờ API nhà cung cấp', label: 'API các sàn (Shopee, TikTok Shop, Lazada, 9mua)', status: 'CHUA_LAM', href: '/quan-tri/kenh-ban', where: 'lib/channels.ts', detail: 'Hiện nhập đơn tay / CSV.' },
     { group: 'Chờ quyết định', label: 'Xác thực 2 lớp và nhà đầu tư duyệt Cấp 5', status: 'CHUA_LAM', where: 'Kiểm soát chi', detail: 'Đang dùng nhập lại mật khẩu cho khoản lớn.' },
   ];
